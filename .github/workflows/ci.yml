@@ -1,0 +1,30 @@
+name: Code Quality Check
+
+# El pipeline se dispara cada vez que alguien abre un Pull Request hacia 'develop'
+on:
+  pull_request:
+    branches: [ "develop" ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descarga el código del repositorio en el servidor de GitHub
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Instala Node.js (versión 18 que es la que usamos)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # 3. Instala las dependencias (eslint, prettier, etc.)
+      - name: Install dependencies
+        run: npm install
+
+      # 4. Ejecuta el comando de revisión que creamos en el package.json
+      - name: Run Linter
+        run: npm run lint
