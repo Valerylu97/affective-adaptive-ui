@@ -111,7 +111,7 @@ git push origin feature/nombre-tarea.
 
 ## 👥 Equipo
 * **Integrante A:** Valeria Lucero - DevOps & Backend Infrastructure
-* **Integrante B:** [Nombre] - Frontend & IHM Specialist
+* **Integrante B:** Xavier Guaygua - Frontend & IHM Specialist
 * **Integrante C:** [Nombre] - Data Scientist & AI Ethics
 
 Última actualización: 06 de Abril, 2026
