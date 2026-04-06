@@ -10,21 +10,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Descarga el código del repositorio en el servidor de GitHub
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Instala Node.js (versión 18 que es la que usamos)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
 
-      # 3. Instala las dependencias
       - name: Install dependencies
         run: npm install
 
-      # 4. Ejecuta el Linter usando npx (evita problemas de permisos de script)
+      # ESTE PASO ES LA CLAVE: Da permisos de ejecución a los binarios de node_modules
+      - name: Fix permissions for ESLint
+        run: chmod +x ./node_modules/.bin/eslint
+
       - name: Run Linter
-        run: npx eslint .
+        run: ./node_modules/.bin/eslint .
