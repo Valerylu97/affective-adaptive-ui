@@ -1,0 +1,30 @@
+name: Code Quality Check
+
+# El pipeline se dispara cada vez que alguien abre un Pull Request hacia 'develop'
+on:
+  pull_request:
+    branches: [ "develop" ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      # ESTE PASO ES LA CLAVE: Da permisos de ejecución a los binarios de node_modules
+      - name: Fix permissions for ESLint
+        run: chmod +x ./node_modules/.bin/eslint
+
+      - name: Run Linter
+        run: ./node_modules/.bin/eslint .
