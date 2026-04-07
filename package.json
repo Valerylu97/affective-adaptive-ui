@@ -1,4 +1,7 @@
 {
+  "name": "affective-adaptive-ui",
+  "version": "1.0.0",
+  "type": "module",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.2.0",
@@ -6,9 +9,7 @@
     "globals": "^17.4.0",
     "prettier": "^3.8.1"
   },
-
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   }
