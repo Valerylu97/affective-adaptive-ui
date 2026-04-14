@@ -179,7 +179,13 @@ const CSS_VARS = {
 // ──────────────────────────────── Base CSS ───────────────────────────────────
 
 const BASE_CSS = `
-*, *::before, *::after {
+body,
+nav[data-aura-role="nav"],
+.aura-secondary,
+.aura-notif,
+.aura-card,
+.aura-section,
+#aura-btn-ayuda {
   transition:
     background-color ${TRANSITION_MS}ms ease,
     color            ${TRANSITION_MS}ms ease,
