@@ -1,5 +1,7 @@
 # 🧠 Aura-UI: Interfaz Adaptativa con Computación Afectiva
 
+![GitHub Actions Status](https://img.shields.io/github/actions/workflow/status/Valerylu97/affective-adaptive-ui/ci.yml?branch=develop&label=CI%20Pipeline&logo=github)
+
 > **Proyecto de Maestría en Ingeniería de Software** > Un sistema inteligente que detecta frustración, concentración y confusión mediante señales biométricas indirectas y adapta la interfaz para optimizar la experiencia del usuario (IHM).
 
 ---
@@ -7,6 +9,7 @@
 ## 📋 Tabla de Contenidos
 - [📖 Introducción](#-introducción)
 - [🏗️ Arquitectura del Sistema](#️-arquitectura-del-sistema)
+- [📂 Estructura del Proyecto](#-estructura-del-proyecto)
 - [🛠️ Stack Tecnológico](#️-stack-tecnológico)
 - [♾️ Prácticas DevOps (Estándares de Calidad)](#️-prácticas-devops-estándares-de-calidad)
 - [🚀 Guía de Configuración del Entorno](#-guía-de-configuración-del-entorno)
@@ -27,9 +30,32 @@ El proyecto se divide en tres capas fundamentales procesadas en el **lado del cl
 
 ---
 
+## 📂 Estructura del Proyecto
+
+```text
+affective-adaptive-ui/
+├── .github/workflows/          # Automatización de CI/CD (Linter)
+├── docs/                       # Documentación teórica, ética y métricas (José Miguel)
+├── logs/                       # Persistencia de datos de telemetría (Buffer local)
+├── src/                        # Código fuente del sistema
+│   ├── logic/               
+│   │   └── engine.js           # Motor de cálculo (fórmulas de frustración) - Valeria
+│   ├── sensors/             
+│   │   └── mouse_keyboard.js   # Captura de eventos de interacción (Xavier)
+│   └── ui/ 
+│       ├── main.css            # Estilos de la interfaz (Xavier)
+│       └── adaptive_views.js   # Lógica de cambio de interfaz - Xavier
+├── index.html                  # Punto de entrada de la aplicación
+├── index.js                    # Orquestador principal y Buffer Global de datos
+├── package.json                # Configuración del proyecto y dependencias (ESM)
+├── .eslintrc.json              # Reglas de calidad de código (ESLint)
+└── .gitignore                  # Exclusión de archivos innecesarios
+```
+
+---
 ## 🛠️ Stack Tecnológico
-* **Lenguaje:** JavaScript (ES6+) / HTML5 / CSS3.
-* **IA de Visión:** `face-api.js` (detección de expresiones faciales).
+* **Lenguaje:** JavaScript (ES6+ / **Módulos ESM**) / HTML5 / CSS3.
+* **IA de Visión:** `face-api.jspl` (detección de expresiones faciales).
 * **Motor de ML:** `TensorFlow.js` (para el modelo de clasificación de estados).
 * **Base de Datos:** `Supabase` (Almacenamiento de telemetría anónima).
 * **Infraestructura:** Node.js v18+.
@@ -93,19 +119,13 @@ npm run lint:fix
 
 ## 🌿 Flujo de Trabajo (GitFlow)
 Para añadir una nueva funcionalidad, sigue estos pasos:
-### 1. Crea una rama desde develop: 
-```bash
-git checkout -b feature/nombre-tarea.
-```
-### 2. Realiza tus cambios y haz commit: 
-```bash
-git commit -m "feat: descripción".
-```
-### 3. Sube tu rama: 
-```bash
-git push origin feature/nombre-tarea.
-```
-### 4. Abre un Pull Request hacia develop en GitHub y avisa al equipo para la revisión.
+### 1. Crea una rama desde develop: `git checkout -b feature/nombre-tarea.`
+
+### 2. Realiza tus cambios y haz commit: `git commit -m "feat: descripción".`
+
+### 3. Sube tu rama: `git push origin feature/nombre-tarea.`
+
+### 4. Abre un Pull Request hacia `develop` en GitHub y avisa al equipo para la revisión.
 
 ---
 
@@ -114,4 +134,4 @@ git push origin feature/nombre-tarea.
 * **Integrante B:** Xavier Guaygua - Frontend & IHM Specialist
 * **Integrante C:** José Guerrero - Data Scientist & AI Ethics
 
-Última actualización: 06 de Abril, 2026
+Última actualización: 07 de Abril, 2026
