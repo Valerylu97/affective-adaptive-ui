@@ -250,6 +250,7 @@
     <div id="demo-controles">
       <button class="btn-soporte" onclick="activarSoporte()">Simular frustración → Modo Soporte</button>
       <button class="btn-normal"  onclick="activarNormal()">Volver a Normal</button>
+      <button id="btn-privacidad" onclick="toggleSensors()" style="border-color:#888780;color:#888780;">⏹ Detener sensores</button>
     </div>
 
     <!-- Cards -->
@@ -292,8 +293,11 @@
 
   <!-- Sensores + UIAdapter inline -->
   <script type="module">
-    import { UIAdapter }   from './src/ui/UIAdapter.js';
-    import { bufferGlobal } from './src/sensors/sensors.js';
+    import { UIAdapter }                                          from './src/ui/UIAdapter.js';
+    import { bufferGlobal, startSensors, stopSensors, isSensing } from './src/sensors/sensors.js';
+
+    // Inicia la captura al cargar la página
+    startSensors();
 
     const adapter = new UIAdapter({
       rootSelector: 'body',
@@ -306,6 +310,17 @@
     // Expone funciones para los botones de demo
     window.activarSoporte = () => adapter.applyAdaptation('support');
     window.activarNormal  = () => adapter.applyAdaptation('normal');
+
+    // Control de privacidad — encender/apagar sensores
+    window.toggleSensors = () => {
+      if (isSensing()) {
+        stopSensors();
+        document.getElementById('btn-privacidad').textContent = '▶ Activar sensores';
+      } else {
+        startSensors();
+        document.getElementById('btn-privacidad').textContent = '⏹ Detener sensores';
+      }
+    };
 
     // Actualiza el panel de telemetría con los datos del buffer
     setInterval(() => {
