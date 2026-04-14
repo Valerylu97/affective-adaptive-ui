@@ -15,9 +15,8 @@
  * @version 1.0.0
  */
 
-import { InputSensor }         from './sensors/InputSensor.js';
-import { HeuristicClassifier } from './sensors/HeuristicClassifier.js';
-import { UIAdapter }           from './ui/UIAdapter.js';
+import { bufferGlobal }  from './sensors/sensors.js';
+import { UIAdapter }     from './ui/UIAdapter.js';
 
 /**
  * Intervalo en ms con el que el pipeline evalúa el estado.
@@ -36,14 +35,8 @@ export class AuraPipeline {
     this._intervalMs = options.intervalMs ?? PIPELINE_INTERVAL_MS;
     this._debug      = options.debug      ?? false;
 
-    // ── Semana 1: Sensing ───────────────────────────────────────────────
-    this._sensor = new InputSensor({
-      sampleRate: 100,
-      bufferSize: 50,
-    });
-
-    // ── Semana 2: Recognizing + Modeling ────────────────────────────────
-    this._classifier = new HeuristicClassifier();
+    // ── Semana 1: Sensing — consume el buffer de sensors.js ─────────────
+    this._classifier = null; // José Miguel inyectará su ML aquí
 
     // ── Semana 2: Expressing ─────────────────────────────────────────────
     this._adapter = new UIAdapter({
@@ -61,13 +54,11 @@ export class AuraPipeline {
   // ─────────────────────────────── Lifecycle ──────────────────────────────
 
   start() {
-    this._sensor.start();
     this._loopId = setInterval(() => this._tick(), this._intervalMs);
     console.info('[Aura] Pipeline iniciado.');
   }
 
   stop() {
-    this._sensor.stop();
     clearInterval(this._loopId);
     this._loopId = null;
     this._adapter.reset();
@@ -77,23 +68,26 @@ export class AuraPipeline {
   // ────────────────────────────── Core Loop ───────────────────────────────
 
   _tick() {
-    // 1. Sensing — obtener muestras acumuladas
-    const mouseSamples = this._sensor.flushMouseBuffer();
-    const keySamples   = this._sensor.flushKeyBuffer();
+    try {
+      // 1. Sensing — lee las últimas muestras del buffer global de sensors.js
+      const ultima = bufferGlobal.at(-1);
+      if (!ultima) return;
 
-    // 2+3. Recognizing + Modeling — clasificar estado
-    const state = this._classifier.classify(mouseSamples, keySamples);
+      // 2+3. Recognizing + Modeling — clasificar si hay clasificador inyectado
+      if (!this._classifier) return;
+      const estado = this._classifier.classify(ultima);
 
-    if (this._debug) {
-      console.debug('[Aura tick]', {
-        mouseSamples: mouseSamples.length,
-        keySamples:   keySamples.length,
-        state,
-      });
+      if (this._debug) {
+        console.debug('[Aura tick]', { ultima, estado });
+      }
+
+      // 4. Expressing — adaptar la UI
+      this._adapter.applyAdaptation(estado);
+
+    } catch (error) {
+      // Si el clasificador falla, el pipeline sigue corriendo sin romper la UI
+      console.error('[Aura] Error en tick — pipeline continúa:', error);
     }
-
-    // 4. Expressing — adaptar la UI
-    this._adapter.applyState(state);
   }
 
   // ───────────────────────────── Public Utils ─────────────────────────────
