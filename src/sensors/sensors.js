@@ -6,143 +6,176 @@
  *   - Teclado: dwell time y flight time
  * Envía datos normalizados al buffer global cada 500ms.
  *
+ * Optimizaciones aplicadas (revisión del equipo):
+ *   - Acumulador simple para mouse en lugar de array (menos memoria)
+ *   - startSensors() / stopSensors() para control de privacidad
+ *
  * @author Xavi
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 // ─────────────────────────────── Constantes ─────────────────────────────────
 
-/** Intervalo en ms para enviar datos al buffer global */
 const BUFFER_INTERVAL_MS = 500;
 
-/** Valores máximos para normalizar entre 0 y 1 */
-const MAX_VELOCIDAD_PX  = 300;
-const MAX_JITTER_PX     = 200;
-const MAX_DWELL_MS      = 500;
-const MAX_FLIGHT_MS     = 2000;
+const MAX_VELOCIDAD_PX = 300;
+const MAX_JITTER_PX    = 200;
+const MAX_DWELL_MS     = 500;
+const MAX_FLIGHT_MS    = 2000;
 
-// ─────────────────────────────── Estado interno ──────────────────────────────
+// ─────────────────────────── Acumulador de mouse ────────────────────────────
+// Optimización: en lugar de un array que crece con cada mousemove,
+// solo guardamos la suma y el conteo para calcular el promedio al final.
 
-/** Última posición conocida del mouse */
-let ultimaPosicion = { x: 0, y: 0, ts: 0 };
-
-/** Penúltima posición para calcular jitter */
+let acumVelocidad    = 0;
+let acumJitter       = 0;
+let conteoMouse      = 0;
+let ultimaPosicion   = { x: 0, y: 0, ts: 0 };
 let penultimaPosicion = { x: 0, y: 0 };
 
-/** Acumulador de muestras de mouse en el intervalo actual */
-const muestrasMouse = [];
+// ────────────────────────── Estado de teclado ───────────────────────────────
 
-/** Timestamp de cuando se presionó la última tecla (para dwell time) */
 const teclasPresionadas = {};
-
-/** Timestamp de cuando se soltó la última tecla (para flight time) */
-let tsUltimoKeyup = 0;
+let tsUltimoKeyup       = 0;
 
 /** Acumulador de muestras de teclado en el intervalo actual */
 const muestrasTeclado = [];
 
+// ─────────────────────────────── Buffer global ──────────────────────────────
+
 /**
- * Buffer global — aquí llegan los datos normalizados cada 500ms.
+ * Buffer global — datos normalizados cada 500ms.
  * Valeria consume este array para el paso de Recognizing.
  * @type {TelemetrySample[]}
  */
 export const bufferGlobal = [];
 
-// ─────────────────────────────── Listeners ──────────────────────────────────
+// ──────────────────────────── Control de captura ────────────────────────────
+
+let _corriendo  = false;
+let _intervalId = null;
+
+/** Handlers guardados para poder removerlos en stopSensors() */
+const _handlers = {
+  mousemove: _onMouseMove,
+  keydown:   _onKeyDown,
+  keyup:     _onKeyUp,
+};
 
 /**
- * Captura movimiento de mouse.
- * Calcula velocidad instantánea y jitter en cada evento.
+ * Inicia la captura de telemetría.
+ * Registra los listeners y arranca el buffer periódico.
+ * Derecho a la desconexión: solo captura cuando está activo.
  */
-document.addEventListener('mousemove', (e) => {
-  const ahora = performance.now();
+export function startSensors() {
+  if (_corriendo) return;
+  _corriendo = true;
+
+  document.addEventListener('mousemove', _handlers.mousemove, { passive: true });
+  document.addEventListener('keydown',   _handlers.keydown,   { passive: true });
+  document.addEventListener('keyup',     _handlers.keyup,     { passive: true });
+
+  _intervalId = setInterval(_enviarAlBuffer, BUFFER_INTERVAL_MS);
+
+  console.info('[Sensors] Captura iniciada.');
+}
+
+/**
+ * Detiene la captura de telemetría.
+ * Remueve listeners y limpia el intervalo.
+ * Derecho a la desconexión: el usuario puede detener la captura en cualquier momento.
+ */
+export function stopSensors() {
+  if (!_corriendo) return;
+  _corriendo = false;
+
+  document.removeEventListener('mousemove', _handlers.mousemove);
+  document.removeEventListener('keydown',   _handlers.keydown);
+  document.removeEventListener('keyup',     _handlers.keyup);
+
+  clearInterval(_intervalId);
+  _intervalId = null;
+
+  // Limpia acumuladores al detener
+  _resetAcumuladores();
+
+  console.info('[Sensors] Captura detenida.');
+}
+
+/** @returns {boolean} true si la captura está activa */
+export function isSensing() {
+  return _corriendo;
+}
+
+// ─────────────────────────────── Handlers ───────────────────────────────────
+
+/** @param {MouseEvent} e */
+function _onMouseMove(e) {
+  const ahora  = performance.now();
   const actual = { x: e.clientX, y: e.clientY };
 
   // Velocidad instantánea: distancia / tiempo entre eventos
-  const distancia = calcularDistancia(ultimaPosicion, actual);
+  const distancia = _distancia(ultimaPosicion, actual);
   const deltaTs   = ahora - ultimaPosicion.ts;
   const velocidad = deltaTs > 0 ? distancia / deltaTs : 0;
 
-  // Jitter: distancia entre P1 (penúltima) y P2 (actual)
-  const jitter = calcularDistancia(penultimaPosicion, actual);
+  // Jitter: distancia entre penúltima y actual (P1→P2)
+  const jitter = _distancia(penultimaPosicion, actual);
 
-  muestrasMouse.push({ velocidad, jitter, ts: ahora });
+  // Acumula en lugar de hacer push a un array
+  acumVelocidad += velocidad;
+  acumJitter    += jitter;
+  conteoMouse   += 1;
 
-  // Actualiza historial de posiciones
   penultimaPosicion = { ...ultimaPosicion };
   ultimaPosicion    = { x: actual.x, y: actual.y, ts: ahora };
-}, { passive: true });
+}
 
-/**
- * Captura tecla presionada.
- * Registra el timestamp para calcular dwell time en keyup.
- * Calcula flight time: tiempo desde el último keyup hasta este keydown.
- */
-document.addEventListener('keydown', (e) => {
+/** @param {KeyboardEvent} e */
+function _onKeyDown(e) {
   const ahora = performance.now();
-
-  // Solo registra si la tecla no estaba ya presionada (evita repeat)
   if (!teclasPresionadas[e.code]) {
     teclasPresionadas[e.code] = ahora;
 
-    // Flight time: tiempo entre el último keyup y este keydown
     const flightTime = tsUltimoKeyup > 0 ? ahora - tsUltimoKeyup : 0;
-
-    muestrasTeclado.push({
-      tecla:      e.code,
-      tsDown:     ahora,
-      flightTime,
-      dwellTime:  null, // se completa en keyup
-    });
+    muestrasTeclado.push({ tecla: e.code, tsDown: ahora, flightTime, dwellTime: null });
   }
-}, { passive: true });
+}
 
-/**
- * Captura tecla soltada.
- * Calcula dwell time: tiempo que estuvo presionada la tecla.
- */
-document.addEventListener('keyup', (e) => {
-  const ahora = performance.now();
+/** @param {KeyboardEvent} e */
+function _onKeyUp(e) {
+  const ahora  = performance.now();
   tsUltimoKeyup = ahora;
 
   const tsDown = teclasPresionadas[e.code];
   if (tsDown) {
-    // Completa el dwell time en la última muestra de esa tecla
     const muestra = [...muestrasTeclado]
       .reverse()
       .find(m => m.tecla === e.code && m.dwellTime === null);
 
-    if (muestra) {
-      muestra.dwellTime = ahora - tsDown;
-    }
-
+    if (muestra) muestra.dwellTime = ahora - tsDown;
     delete teclasPresionadas[e.code];
   }
-}, { passive: true });
+}
 
-// ──────────────────────────── Buffer periódico ───────────────────────────────
+// ────────────────────────── Buffer periódico ────────────────────────────────
 
-/**
- * Cada 500ms calcula las métricas promedio del intervalo,
- * normaliza los valores y los empuja al buffer global.
- */
-setInterval(() => {
-  const metricas = calcularMetricas();
-  const normalizado = normalizar(metricas);
+function _enviarAlBuffer() {
+  const metricas    = _calcularMetricas();
+  const normalizado = _normalizar(metricas);
 
   /** @type {TelemetrySample} */
   const muestra = {
-    ts:               performance.now(),
-    velocidadMouse:   normalizado.velocidadMouse,
-    jitter:           normalizado.jitter,
-    dwellTime:        normalizado.dwellTime,
-    flightTime:       normalizado.flightTime,
-    raw:              metricas,
+    ts:             performance.now(),
+    velocidadMouse: normalizado.velocidadMouse,
+    jitter:         normalizado.jitter,
+    dwellTime:      normalizado.dwellTime,
+    flightTime:     normalizado.flightTime,
+    raw:            metricas,
   };
 
   bufferGlobal.push(muestra);
 
-  // Log en consola para el entregable de S1
   console.log('[Aura Telemetría]', {
     'Velocidad mouse (norm)': muestra.velocidadMouse.toFixed(3),
     'Jitter (norm)':          muestra.jitter.toFixed(3),
@@ -151,77 +184,50 @@ setInterval(() => {
     'raw (px/ms)':            metricas,
   });
 
-  // Limpia acumuladores del intervalo
-  muestrasMouse.length   = 0;
-  muestrasTeclado.length = 0;
+  _resetAcumuladores();
+}
 
-}, BUFFER_INTERVAL_MS);
+// ──────────────────────── Cálculo de métricas ───────────────────────────────
 
-// ─────────────────────────── Cálculo de métricas ────────────────────────────
+function _calcularMetricas() {
+  // Promedio directo desde el acumulador — sin iterar un array
+  const velocidadMedia = conteoMouse > 0 ? acumVelocidad / conteoMouse : 0;
+  const jitterMedio    = conteoMouse > 0 ? acumJitter    / conteoMouse : 0;
 
-/**
- * Promedia las muestras acumuladas del intervalo actual.
- * @returns {RawMetrics}
- */
-function calcularMetricas() {
-  const velocidadMedia = muestrasMouse.length > 0
-    ? promedio(muestrasMouse.map(m => m.velocidad))
-    : 0;
-
-  const jitterMedio = muestrasMouse.length > 0
-    ? promedio(muestrasMouse.map(m => m.jitter))
-    : 0;
-
-  const muestrasConDwell = muestrasTeclado.filter(m => m.dwellTime !== null);
-  const dwellMedio = muestrasConDwell.length > 0
-    ? promedio(muestrasConDwell.map(m => m.dwellTime))
-    : 0;
-
+  const muestrasConDwell  = muestrasTeclado.filter(m => m.dwellTime !== null);
   const muestrasConFlight = muestrasTeclado.filter(m => m.flightTime > 0);
+
+  const dwellMedio  = muestrasConDwell.length  > 0
+    ? _promedio(muestrasConDwell.map(m => m.dwellTime))  : 0;
   const flightMedio = muestrasConFlight.length > 0
-    ? promedio(muestrasConFlight.map(m => m.flightTime))
-    : 0;
+    ? _promedio(muestrasConFlight.map(m => m.flightTime)) : 0;
 
+  return { velocidadMouse: velocidadMedia, jitter: jitterMedio, dwellTime: dwellMedio, flightTime: flightMedio };
+}
+
+function _normalizar(metricas) {
   return {
-    velocidadMouse: velocidadMedia,
-    jitter:         jitterMedio,
-    dwellTime:      dwellMedio,
-    flightTime:     flightMedio,
+    velocidadMouse: Math.min(metricas.velocidadMouse / MAX_VELOCIDAD_PX, 1),
+    jitter:         Math.min(metricas.jitter         / MAX_JITTER_PX,    1),
+    dwellTime:      Math.min(metricas.dwellTime      / MAX_DWELL_MS,     1),
+    flightTime:     Math.min(metricas.flightTime     / MAX_FLIGHT_MS,    1),
   };
 }
 
-/**
- * Normaliza las métricas a valores entre 0 y 1.
- * @param {RawMetrics} metricas
- * @returns {RawMetrics}
- */
-function normalizar(metricas) {
-  return {
-    velocidadMouse: Math.min(metricas.velocidadMouse / MAX_VELOCIDAD_PX,  1),
-    jitter:         Math.min(metricas.jitter         / MAX_JITTER_PX,     1),
-    dwellTime:      Math.min(metricas.dwellTime      / MAX_DWELL_MS,      1),
-    flightTime:     Math.min(metricas.flightTime     / MAX_FLIGHT_MS,     1),
-  };
+function _resetAcumuladores() {
+  acumVelocidad        = 0;
+  acumJitter           = 0;
+  conteoMouse          = 0;
+  muestrasTeclado.length = 0;
 }
 
-// ────────────────────────────── Utilidades ──────────────────────────────────
+// ──────────────────────────── Utilidades ────────────────────────────────────
 
-/**
- * Distancia euclidiana entre dos puntos.
- * @param {{x:number, y:number}} p1
- * @param {{x:number, y:number}} p2
- * @returns {number} distancia en px
- */
-function calcularDistancia(p1, p2) {
+function _distancia(p1, p2) {
   return Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
 }
 
-/**
- * Promedio de un array de números.
- * @param {number[]} arr
- * @returns {number}
- */
-function promedio(arr) {
+function _promedio(arr) {
   return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
