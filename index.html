@@ -248,9 +248,9 @@
 
     <!-- Controles de demo manual -->
     <div id="demo-controles">
-      <button class="btn-soporte" onclick="activarSoporte()">Simular frustración → Modo Soporte</button>
-      <button class="btn-normal"  onclick="activarNormal()">Volver a Normal</button>
-      <button id="btn-privacidad" onclick="toggleSensors()" style="border-color:#888780;color:#888780;">⏹ Detener sensores</button>
+      <button id="btn-soporte" class="btn-soporte" >Simular frustración → Modo Soporte</button>
+      <button id="btn-normal" class="btn-normal">Volver a Normal</button>
+      <button id="btn-privacidad" style="border-color:#888780;color:#888780;">⏹ Detener sensores</button>
     </div>
 
     <!-- Cards -->
@@ -267,10 +267,10 @@
 
     <!-- Área de escritura -->
     <div class="aura-section">
-      <label style="font-size:13px;color:#888780;display:block;margin-bottom:.4rem;">
+      <label for="area-trabajo" style="font-size:13px;color:#888780;display:block;margin-bottom:.4rem;">
         Escribe aquí — los sensores están activos
       </label>
-      <textarea placeholder="Empieza a escribir o mueve el mouse..."></textarea>
+      <textarea id="area-trabajo" placeholder="Empieza a escribir o mueve el mouse..."></textarea>
     </div>
 
   </main>
@@ -279,9 +279,9 @@
   <div id="telemetria">
     <strong>Telemetría en tiempo real</strong>
     <div class="tel-row"><span class="tel-label">Vel. mouse</span> <span class="tel-val" id="t-vel">—</span></div>
-    <div class="tel-row"><span class="tel-label">Jitter</span>      <span class="tel-val" id="t-jit">—</span></div>
-    <div class="tel-row"><span class="tel-label">Dwell time</span>  <span class="tel-val" id="t-dw">—</span></div>
-    <div class="tel-row"><span class="tel-label">Flight time</span> <span class="tel-val" id="t-fl">—</span></div>
+    <div class="tel-row"><span class="tel-label">Variación (jitter)</span>      <span class="tel-val" id="t-jit">—</span></div>
+    <div class="tel-row"><span class="tel-label">T. pulsación (dwell)</span>  <span class="tel-val" id="t-dw">—</span></div>
+    <div class="tel-row"><span class="tel-label">T. vuelo (flight)</span> <span class="tel-val" id="t-fl">—</span></div>
     <div class="tel-row"><span class="tel-label">Muestras</span>    <span class="tel-val" id="t-buf">0</span></div>
   </div>
 
@@ -307,20 +307,26 @@
       },
     });
 
-    // Expone funciones para los botones de demo
-    window.activarSoporte = () => adapter.applyAdaptation('support');
-    window.activarNormal  = () => adapter.applyAdaptation('normal');
+    // Botones de demo — addEventListener en lugar de onclick
+    document.getElementById('btn-soporte').addEventListener('click', () => {
+      adapter.applyAdaptation('support');
+    });
 
-    // Control de privacidad — encender/apagar sensores
-    window.toggleSensors = () => {
+    document.getElementById('btn-normal').addEventListener('click', () => {
+      adapter.applyAdaptation('normal');
+    });
+
+    // Control de privacidad — derecho a la desconexión
+    document.getElementById('btn-privacidad').addEventListener('click', () => {
+      const btn = document.getElementById('btn-privacidad');
       if (isSensing()) {
         stopSensors();
-        document.getElementById('btn-privacidad').textContent = '▶ Activar sensores';
+        btn.textContent = '▶ Activar sensores';
       } else {
         startSensors();
-        document.getElementById('btn-privacidad').textContent = '⏹ Detener sensores';
+        btn.textContent = '⏹ Detener sensores';
       }
-    };
+    });
 
     // Actualiza el panel de telemetría con los datos del buffer
     setInterval(() => {
