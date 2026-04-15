@@ -193,7 +193,9 @@
       transition:    background 400ms ease;
     }
 
-    body.aura--support .estado-dot { background: #D85A30; }
+    body.aura--support .estado-dot                    { background: #D85A30; }
+    body[data-aura-state="frustrado"]  .estado-dot    { background: #D85A30; }
+    body[data-aura-state="concentrado"] .estado-dot   { background: #185FA5; }
 
     /* ── Controles de demo ── */
     #demo-controles {
@@ -214,7 +216,8 @@
 
     #demo-controles button:hover { background: #F1EFE8; }
     #demo-controles .btn-soporte { border-color: #D85A30; color: #D85A30; }
-    #demo-controles .btn-normal  { border-color: #1D9E75; color: #1D9E75; }
+    #demo-controles .btn-normal       { border-color: #1D9E75; color: #1D9E75; }
+    #demo-controles .btn-concentrado  { border-color: #185FA5; color: #185FA5; }
   </style>
 </head>
 <body class="aura--normal" data-aura-state="normal">
@@ -242,8 +245,9 @@
 
     <!-- Controles de demo manual -->
     <div id="demo-controles">
-      <button id="btn-soporte" class="btn-soporte" >Simular frustración → Modo Soporte</button>
-      <button id="btn-normal" class="btn-normal">Volver a Normal</button>
+      <button id="btn-frustrado"   class="btn-soporte">Simular frustración → Modo Soporte</button>
+      <button id="btn-concentrado" class="btn-concentrado">Simular concentración → Modo Zen</button>
+      <button id="btn-normal"      class="btn-normal">Volver a Normal</button>
       <button id="btn-privacidad" style="border-color:#888780;color:#888780;">⏹ Detener sensores</button>
     </div>
 
@@ -302,14 +306,17 @@
     });
 
     // Botones de demo — addEventListener en lugar de onclick
-    document.getElementById('btn-soporte').addEventListener('click', () => {
-      adapter.applyAdaptation('support');
+    document.getElementById('btn-frustrado').addEventListener('click', () => {
+      adapter.applyAdaptation('frustrado');
+    });
+
+    document.getElementById('btn-concentrado').addEventListener('click', () => {
+      adapter.applyAdaptation('concentrado');
     });
 
     document.getElementById('btn-normal').addEventListener('click', () => {
       adapter.applyAdaptation('normal');
     });
-
     // Control de privacidad — derecho a la desconexión
     document.getElementById('btn-privacidad').addEventListener('click', () => {
       const btn = document.getElementById('btn-privacidad');
