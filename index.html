@@ -14,9 +14,6 @@
       --aura-text:              #2C2C2A;
       --aura-text-secondary:    #888780;
       --aura-border:            #E4E2DA;
-      --aura-nav-display:       block;
-      --aura-secondary-display: block;
-      --aura-notif-display:     block;
       --aura-card-radius:       8px;
       --aura-spacing:           1rem;
     }
@@ -50,21 +47,19 @@
 
     /* Notificaciones — se ocultan en modo soporte */
     .aura-notif {
-      display:     var(--aura-notif-display, block);
-      background:  #EAF3DE;
-      color:       #3B6D11;
-      font-size:   13px;
-      padding:     6px 14px;
+      background:    #EAF3DE;
+      color:         #3B6D11;
+      font-size:     13px;
+      padding:       6px 14px;
       border-radius: 999px;
     }
 
     /* ── Nav lateral ── */
     nav[data-aura-role="nav"] {
-      grid-area:   nav;
-      display:     var(--aura-nav-display, block);
-      background:  var(--aura-surface);
+      grid-area:    nav;
+      background:   var(--aura-surface);
       border-right: 1px solid var(--aura-border);
-      padding:     var(--aura-spacing);
+      padding:      var(--aura-spacing);
     }
 
     nav h2 {
@@ -100,7 +95,6 @@
 
     /* ── Elementos secundarios ── */
     .aura-secondary {
-      display:       var(--aura-secondary-display, block);
       background:    var(--aura-surface);
       border:        1px solid var(--aura-border);
       border-radius: var(--aura-card-radius);
