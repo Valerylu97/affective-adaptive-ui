@@ -1,8 +1,14 @@
 /**
  * @module UIAdapter
- * @description Semana 2 — Expressing (Bucle de Picard)
- * Implementa las dos variantes visuales de la interfaz y la
- * lógica de transición según el estado emocional detectado.
+ * @description Semana 3 — Refinamiento de Interacción Seamless
+ * Mejora las transiciones entre estados para evitar el efecto
+ * "Uncanny Valley" — cambios bruscos que desorientan al usuario.
+ *
+ * Cambios S3:
+ *   - display:none reemplazado por opacity + visibility (animable)
+ *   - Transiciones escalonadas: primero oculta, luego muestra
+ *   - Animación de entrada para el botón de ayuda (slide desde abajo)
+ *   - Animación de entrada para el modo soporte (fade)
  *
  * Modos:
  *   'normal'   → Interfaz completa con menús y notificaciones
@@ -10,14 +16,22 @@
  *                mayor contraste, botón de ayuda destacado
  *
  * @author Xavi
- * @version 2.0.0
+ * @version 3.0.0
  */
 
 /** @type {AdaptationState[]} */
 const ESTADOS_VALIDOS = ['normal', 'support'];
 
-/** Duración de transición CSS en ms — evita cambios bruscos */
-const TRANSITION_MS = 400;
+/**
+ * Duraciones de transición en ms.
+ * Escalonadas para evitar cambios simultáneos bruscos.
+ */
+const TRANSITION = {
+  ocultar:  300,   // elementos que desaparecen
+  mostrar:  400,   // elementos que aparecen
+  color:    500,   // cambios de color y fondo
+  retraso:  150,   // pausa entre ocultar y mostrar
+};
 
 export class UIAdapter {
   /**
@@ -31,6 +45,7 @@ export class UIAdapter {
 
     /** @type {AdaptationState} */
     this._estadoActual = 'normal';
+    this._transicionando = false;
 
     this._inyectarEstilos();
     this._crearBotonAyuda();
@@ -39,8 +54,8 @@ export class UIAdapter {
   // ─────────────────────────────── Public API ─────────────────────────────
 
   /**
-   * Cambia las clases CSS de la interfaz según el estado detectado.
-   * No recarga la página — usa solo manipulación de clases y CSS vars.
+   * Cambia la interfaz según el estado detectado.
+   * Usa transiciones escalonadas para evitar cambios bruscos.
    *
    * @param {AdaptationState} state  'normal' | 'support'
    */
@@ -51,15 +66,13 @@ export class UIAdapter {
     }
 
     if (state === this._estadoActual) return;
+    if (this._transicionando) return;
 
     const anterior = this._estadoActual;
-    this._estadoActual = state;
+    this._estadoActual   = 'transitioning';
+    this._transicionando = true;
 
-    this._actualizarDOM(state);
-
-    if (typeof this.onStateChange === 'function') {
-      this.onStateChange({ from: anterior, to: state });
-    }
+    this._transicionEscalonada(state, anterior);
   }
 
   /** @returns {AdaptationState} */
@@ -69,53 +82,96 @@ export class UIAdapter {
 
   /** Regresa al modo normal */
   reset() {
+    this._estadoActual   = 'support';
+    this._transicionando = false;
     this.applyAdaptation('normal');
   }
 
-  // ──────────────────────────── DOM Mutations ──────────────────────────────
+  // ──────────────────────────── Transición escalonada ─────────────────────
 
   /**
-   * Aplica el estado al DOM mediante clases y CSS custom properties.
+   * Orquesta el cambio en 3 fases para evitar el efecto brusco:
+   *   Fase 1 — Oculta los elementos que van a desaparecer
+   *   Fase 2 — Cambia colores y layout (retraso pequeño)
+   *   Fase 3 — Muestra los elementos nuevos
+   *
    * @param {AdaptationState} state
+   * @param {AdaptationState} anterior
    */
-  _actualizarDOM(state) {
+  _transicionEscalonada(state, anterior) {
     const root = document.querySelector(this.rootSelector);
-    if (!root) {
-      console.error(`[UIAdapter] Selector no encontrado: "${this.rootSelector}"`);
-      return;
-    }
+    if (!root) return;
 
-    // Limpia clases anteriores
-    ESTADOS_VALIDOS.forEach(s => root.classList.remove(`aura--${s}`));
+    // ── Fase 1: marca que está en transición ────────────────────────────
+    root.classList.add('aura--transitioning');
 
-    // Aplica nuevo estado
-    root.classList.add(`aura--${state}`);
-    root.dataset.auraState = state;
+    // ── Fase 2: aplica clases y CSS vars después del retraso ─────────────
+    setTimeout(() => {
+      ESTADOS_VALIDOS.forEach(s => root.classList.remove(`aura--${s}`));
+      root.classList.add(`aura--${state}`);
+      root.dataset.auraState = state;
 
-    // Aplica CSS vars del estado
-    const vars = CSS_VARS[state];
-    Object.entries(vars).forEach(([prop, val]) => {
-      root.style.setProperty(prop, val);
-    });
+      const vars = CSS_VARS[state];
+      Object.entries(vars).forEach(([prop, val]) => {
+        root.style.setProperty(prop, val);
+      });
 
-    // Muestra u oculta el botón de ayuda
-    const btnAyuda = document.getElementById('aura-btn-ayuda');
-    if (btnAyuda) {
-      btnAyuda.style.display = state === 'support' ? 'flex' : 'none';
-    }
+      // Maneja el botón de ayuda con animación
+      this._animarBotonAyuda(state);
+
+    }, TRANSITION.retraso);
+
+    // ── Fase 3: limpia la clase de transición ────────────────────────────
+    const duracionTotal = TRANSITION.retraso + TRANSITION.color;
+    setTimeout(() => {
+      root.classList.remove('aura--transitioning');
+      this._estadoActual   = state;
+      this._transicionando = false;
+
+      if (typeof this.onStateChange === 'function') {
+        this.onStateChange({ from: anterior, to: state });
+      }
+    }, duracionTotal);
   }
 
   // ─────────────────────────── Botón de ayuda ─────────────────────────────
 
   /**
-   * Crea el botón de ayuda destacado que aparece en modo Soporte.
-   * Se inserta una sola vez en el DOM.
+   * Anima la entrada/salida del botón de ayuda.
+   * Slide desde abajo al aparecer, slide hacia abajo al desaparecer.
+   * @param {AdaptationState} state
+   */
+  _animarBotonAyuda(state) {
+    const btn = document.getElementById('aura-btn-ayuda');
+    if (!btn) return;
+
+    if (state === 'support') {
+      // Hace visible antes de animar (necesario para que CSS lo vea)
+      btn.style.display = 'flex';
+      // Pequeño retraso para que el navegador registre el display:flex
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          btn.classList.add('aura-btn-ayuda--visible');
+        });
+      });
+    } else {
+      btn.classList.remove('aura-btn-ayuda--visible');
+      // Oculta después de que termine la animación de salida
+      setTimeout(() => {
+        btn.style.display = 'none';
+      }, TRANSITION.mostrar);
+    }
+  }
+
+  /**
+   * Crea el botón de ayuda en el DOM.
+   * Se inserta una sola vez.
    */
   _crearBotonAyuda() {
     if (document.getElementById('aura-btn-ayuda')) return;
 
     const btn = document.createElement('button');
-    btn.id          = 'aura-btn-ayuda';
+    btn.id = 'aura-btn-ayuda';
     btn.textContent = '¿Necesitas ayuda?';
     btn.setAttribute('aria-label', 'Botón de ayuda — modo soporte activo');
     btn.style.display = 'none';
@@ -131,7 +187,7 @@ export class UIAdapter {
   // ──────────────────────────────── Estilos ────────────────────────────────
 
   /**
-   * Inyecta en <head> los estilos base de Aura.
+   * Inyecta los estilos base de Aura en <head>.
    * Idempotente — solo se ejecuta una vez.
    */
   _inyectarEstilos() {
@@ -155,9 +211,6 @@ const CSS_VARS = {
     '--aura-text':              '#2C2C2A',
     '--aura-text-secondary':    '#888780',
     '--aura-border':            '#E4E2DA',
-    '--aura-nav-display':       'block',
-    '--aura-secondary-display': 'block',
-    '--aura-notif-display':     'block',
     '--aura-card-radius':       '8px',
     '--aura-spacing':           '1rem',
   },
@@ -168,9 +221,6 @@ const CSS_VARS = {
     '--aura-text':              '#1A1A18',
     '--aura-text-secondary':    '#444441',
     '--aura-border':            '#2C2C2A',
-    '--aura-nav-display':       'none',
-    '--aura-secondary-display': 'none',
-    '--aura-notif-display':     'none',
     '--aura-card-radius':       '12px',
     '--aura-spacing':           '1.5rem',
   },
@@ -179,51 +229,131 @@ const CSS_VARS = {
 // ──────────────────────────────── Base CSS ───────────────────────────────────
 
 const BASE_CSS = `
+
+/* ── Animaciones definidas ── */
+@keyframes aura-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes aura-slide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes aura-slide-down {
+  from { opacity: 1; transform: translateY(0);    }
+  to   { opacity: 0; transform: translateY(24px); }
+}
+
+/* ── Transiciones limitadas a contenedores principales ── */
 body,
 nav[data-aura-role="nav"],
 .aura-secondary,
 .aura-notif,
 .aura-card,
 .aura-section,
-#aura-btn-ayuda {
+header,
+main {
   transition:
-    background-color ${TRANSITION_MS}ms ease,
-    color            ${TRANSITION_MS}ms ease,
-    font-size        ${TRANSITION_MS}ms ease,
-    border-color     ${TRANSITION_MS}ms ease,
-    opacity          ${TRANSITION_MS}ms ease;
+    background-color ${TRANSITION.color}ms ease,
+    color            ${TRANSITION.color}ms ease,
+    font-size        ${TRANSITION.color}ms ease,
+    border-color     ${TRANSITION.color}ms ease;
 }
 
+/* ── Estado base del body ── */
 [data-aura-state] {
   font-size:  var(--aura-font-size-base, 16px);
   background: var(--aura-bg, #F7F6F2);
   color:      var(--aura-text, #2C2C2A);
 }
 
-.aura-nav,
+/* ── Nav lateral ── */
 [data-aura-role="nav"] {
-  display: var(--aura-nav-display, block);
+  opacity:    1;
+  visibility: visible;
+  transition:
+    opacity    ${TRANSITION.ocultar}ms ease,
+    visibility ${TRANSITION.ocultar}ms ease,
+    background-color ${TRANSITION.color}ms ease;
 }
 
+/* Oculta con fade — NO display:none directo */
+body.aura--support [data-aura-role="nav"] {
+  opacity:    0;
+  visibility: hidden;
+}
+
+/* ── Elementos secundarios ── */
 .aura-secondary,
 [data-aura-role="secondary"] {
-  display: var(--aura-secondary-display, block);
+  opacity:    1;
+  visibility: visible;
+  max-height: 200px;
+  overflow:   hidden;
+  transition:
+    opacity    ${TRANSITION.ocultar}ms ease,
+    visibility ${TRANSITION.ocultar}ms ease,
+    max-height ${TRANSITION.ocultar}ms ease;
 }
 
+body.aura--support .aura-secondary,
+body.aura--support [data-aura-role="secondary"] {
+  opacity:    0;
+  visibility: hidden;
+  max-height: 0;
+}
+
+/* ── Notificaciones ── */
 .aura-notif,
 [data-aura-role="notificacion"] {
-  display: var(--aura-notif-display, block);
+  opacity:    1;
+  visibility: visible;
+  transition:
+    opacity    ${TRANSITION.ocultar}ms ease,
+    visibility ${TRANSITION.ocultar}ms ease;
 }
 
+body.aura--support .aura-notif,
+body.aura--support [data-aura-role="notificacion"] {
+  opacity:    0;
+  visibility: hidden;
+}
+
+/* ── Items secundarios del menú ── */
+.aura-menu-item:not(.aura-menu-item--principal) {
+  opacity:    1;
+  max-height: 40px;
+  overflow:   hidden;
+  transition:
+    opacity    ${TRANSITION.ocultar}ms ease,
+    max-height ${TRANSITION.ocultar}ms ease;
+}
+
+body.aura--support .aura-menu-item:not(.aura-menu-item--principal) {
+  opacity:    0;
+  max-height: 0;
+}
+
+/* ── Cards — animación de entrada en modo soporte ── */
+body.aura--support .aura-card {
+  border:        2px solid var(--aura-border);
+  border-radius: var(--aura-card-radius);
+  animation:     aura-fade-in ${TRANSITION.mostrar}ms ease forwards;
+}
+
+/* ── Sección principal ── */
 [data-aura-state] .aura-section {
   padding: var(--aura-spacing, 1rem);
 }
 
-[data-aura-state="aura--support"] .aura-card {
-  border:        2px solid var(--aura-border);
-  border-radius: var(--aura-card-radius);
+/* ── Indicador de transición en curso ── */
+body.aura--transitioning {
+  cursor: wait;
 }
 
+/* ── Botón de ayuda ── */
 #aura-btn-ayuda {
   position:      fixed;
   bottom:        2rem;
@@ -241,9 +371,21 @@ nav[data-aura-role="nav"],
   cursor:        pointer;
   z-index:       9999;
   box-shadow:    0 4px 16px rgba(29, 158, 117, 0.4);
+
+  /* Estado inicial — invisible y abajo */
+  opacity:   0;
+  transform: translateY(24px);
   transition:
-    transform  ${TRANSITION_MS}ms ease,
-    box-shadow ${TRANSITION_MS}ms ease;
+    transform  ${TRANSITION.mostrar}ms ease,
+    box-shadow ${TRANSITION.mostrar}ms ease,
+    opacity    ${TRANSITION.mostrar}ms ease;
+}
+
+/* Clase que activa la animación de entrada */
+#aura-btn-ayuda.aura-btn-ayuda--visible {
+  opacity:   1;
+  transform: translateY(0);
+  animation: aura-slide-up ${TRANSITION.mostrar}ms ease forwards;
 }
 
 #aura-btn-ayuda:hover {
@@ -257,5 +399,5 @@ nav[data-aura-role="nav"],
 `;
 
 /**
- * @typedef {'normal' | 'support'} AdaptationState
+ * @typedef {'normal' | 'support' | 'transitioning'} AdaptationState
  */
