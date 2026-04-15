@@ -1,37 +1,35 @@
 /**
  * @module UIAdapter
- * @description Semana 3 — Refinamiento de Interacción Seamless
- * Mejora las transiciones entre estados para evitar el efecto
- * "Uncanny Valley" — cambios bruscos que desorientan al usuario.
+ * @description Semana 2 — Expressing (Bucle de Picard)
+ * Semana 3 — Refinamiento Seamless
  *
- * Cambios S3:
- *   - display:none reemplazado por opacity + visibility (animable)
- *   - Transiciones escalonadas: primero oculta, luego muestra
- *   - Animación de entrada para el botón de ayuda (slide desde abajo)
- *   - Animación de entrada para el modo soporte (fade)
+ * Implementa tres variantes visuales de la interfaz:
+ *   'normal'     → Interfaz completa con menús y notificaciones
+ *   'frustrado'  → Modo Soporte: oculta menús, aumenta contraste, muestra toast
+ *   'concentrado'→ Modo Zen: reduce opacidad de elementos distractores
  *
- * Modos:
- *   'normal'   → Interfaz completa con menús y notificaciones
- *   'support'  → Modo Soporte: elementos no esenciales ocultos,
- *                mayor contraste, botón de ayuda destacado
+ * El motor de Valeria escribe en body[data-aura-state] y la UI reacciona
+ * automáticamente sin recargar la página.
  *
  * @author Xavi
- * @version 3.0.0
+ * @version 4.0.0
  */
 
 /** @type {AdaptationState[]} */
-const ESTADOS_VALIDOS = ['normal', 'support'];
+const ESTADOS_VALIDOS = ['normal', 'frustrado', 'concentrado'];
 
 /**
- * Duraciones de transición en ms.
- * Escalonadas para evitar cambios simultáneos bruscos.
+ * Duraciones de transición en ms — escalonadas para evitar cambios bruscos.
  */
 const TRANSITION = {
-  ocultar:  300,   // elementos que desaparecen
-  mostrar:  400,   // elementos que aparecen
-  color:    500,   // cambios de color y fondo
-  retraso:  150,   // pausa entre ocultar y mostrar
+  ocultar: 300,
+  mostrar: 400,
+  color:   500,
+  retraso: 150,
 };
+
+/** Tiempo en ms antes de que el toast se auto-cierre */
+const TOAST_DURACION_MS = 4000;
 
 export class UIAdapter {
   /**
@@ -44,20 +42,21 @@ export class UIAdapter {
     this.onStateChange = options.onStateChange ?? null;
 
     /** @type {AdaptationState} */
-    this._estadoActual = 'normal';
+    this._estadoActual   = 'normal';
     this._transicionando = false;
+    this._toastTimeout   = null;
 
     this._inyectarEstilos();
-    this._crearBotonAyuda();
+    this._crearToast();
   }
 
   // ─────────────────────────────── Public API ─────────────────────────────
 
   /**
-   * Cambia la interfaz según el estado detectado.
-   * Usa transiciones escalonadas para evitar cambios bruscos.
+   * Cambia la interfaz según el estado emocional detectado.
+   * Reacciona al atributo data-aura-state sin recargar la página.
    *
-   * @param {AdaptationState} state  'normal' | 'support'
+   * @param {AdaptationState} state  'normal' | 'frustrado' | 'concentrado'
    */
   applyAdaptation(state) {
     if (!ESTADOS_VALIDOS.includes(state)) {
@@ -68,7 +67,7 @@ export class UIAdapter {
     if (state === this._estadoActual) return;
     if (this._transicionando) return;
 
-    const anterior = this._estadoActual;
+    const anterior       = this._estadoActual;
     this._estadoActual   = 'transitioning';
     this._transicionando = true;
 
@@ -82,7 +81,7 @@ export class UIAdapter {
 
   /** Regresa al modo normal */
   reset() {
-    this._estadoActual   = 'support';
+    this._estadoActual   = this._estadoActual === 'transitioning' ? 'normal' : this._estadoActual;
     this._transicionando = false;
     this.applyAdaptation('normal');
   }
@@ -91,9 +90,9 @@ export class UIAdapter {
 
   /**
    * Orquesta el cambio en 3 fases para evitar el efecto brusco:
-   *   Fase 1 — Oculta los elementos que van a desaparecer
-   *   Fase 2 — Cambia colores y layout (retraso pequeño)
-   *   Fase 3 — Muestra los elementos nuevos
+   *   Fase 1 — marca transitioning
+   *   Fase 2 — aplica clases y CSS vars (con retraso)
+   *   Fase 3 — limpia y notifica
    *
    * @param {AdaptationState} state
    * @param {AdaptationState} anterior
@@ -102,10 +101,10 @@ export class UIAdapter {
     const root = document.querySelector(this.rootSelector);
     if (!root) return;
 
-    // ── Fase 1: marca que está en transición ────────────────────────────
+    // Fase 1 — indica que está en transición
     root.classList.add('aura--transitioning');
 
-    // ── Fase 2: aplica clases y CSS vars después del retraso ─────────────
+    // Fase 2 — aplica el nuevo estado
     setTimeout(() => {
       ESTADOS_VALIDOS.forEach(s => root.classList.remove(`aura--${s}`));
       root.classList.add(`aura--${state}`);
@@ -116,13 +115,16 @@ export class UIAdapter {
         root.style.setProperty(prop, val);
       });
 
-      // Maneja el botón de ayuda con animación
-      this._animarBotonAyuda(state);
+      // Muestra el toast solo en modo frustrado
+      if (state === 'frustrado') {
+        this._mostrarToast('Modo soporte activado — estamos aquí para ayudarte.');
+      } else {
+        this._ocultarToast();
+      }
 
     }, TRANSITION.retraso);
 
-    // ── Fase 3: limpia la clase de transición ────────────────────────────
-    const duracionTotal = TRANSITION.retraso + TRANSITION.color;
+    // Fase 3 — limpia y notifica
     setTimeout(() => {
       root.classList.remove('aura--transitioning');
       this._estadoActual   = state;
@@ -131,65 +133,68 @@ export class UIAdapter {
       if (typeof this.onStateChange === 'function') {
         this.onStateChange({ from: anterior, to: state });
       }
-    }, duracionTotal);
+    }, TRANSITION.retraso + TRANSITION.color);
   }
 
-  // ─────────────────────────── Botón de ayuda ─────────────────────────────
+  // ──────────────────────────── Toast de ayuda ────────────────────────────
 
   /**
-   * Anima la entrada/salida del botón de ayuda.
-   * Slide desde abajo al aparecer, slide hacia abajo al desaparecer.
-   * @param {AdaptationState} state
+   * Crea el elemento toast en el DOM — solo una vez.
+   * El toast reemplaza al botón fijo de S2 con una notificación contextual.
    */
-  _animarBotonAyuda(state) {
-    const btn = document.getElementById('aura-btn-ayuda');
-    if (!btn) return;
+  _crearToast() {
+    if (document.getElementById('aura-toast')) return;
 
-    if (state === 'support') {
-      // Hace visible antes de animar (necesario para que CSS lo vea)
-      btn.style.display = 'flex';
-      // Pequeño retraso para que el navegador registre el display:flex
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          btn.classList.add('aura-btn-ayuda--visible');
-        });
-      });
-    } else {
-      btn.classList.remove('aura-btn-ayuda--visible');
-      // Oculta después de que termine la animación de salida
-      setTimeout(() => {
-        btn.style.display = 'none';
-      }, TRANSITION.mostrar);
+    const toast = document.createElement('div');
+    toast.id = 'aura-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+
+    // Botón de cierre manual
+    const btnCerrar = document.createElement('button');
+    btnCerrar.id          = 'aura-toast-cerrar';
+    btnCerrar.textContent = '×';
+    btnCerrar.setAttribute('aria-label', 'Cerrar notificación');
+    btnCerrar.addEventListener('click', () => this._ocultarToast());
+
+    const mensaje = document.createElement('span');
+    mensaje.id = 'aura-toast-mensaje';
+
+    toast.appendChild(mensaje);
+    toast.appendChild(btnCerrar);
+    document.body.appendChild(toast);
+  }
+
+  /**
+   * Muestra el toast con un mensaje y lo auto-cierra después de TOAST_DURACION_MS.
+   * @param {string} mensaje
+   */
+  _mostrarToast(mensaje) {
+    const toast   = document.getElementById('aura-toast');
+    const spanMsg = document.getElementById('aura-toast-mensaje');
+    if (!toast || !spanMsg) return;
+
+    spanMsg.textContent = mensaje;
+    toast.classList.add('aura-toast--visible');
+
+    // Limpia timeout anterior si existía
+    if (this._toastTimeout) clearTimeout(this._toastTimeout);
+    this._toastTimeout = setTimeout(() => this._ocultarToast(), TOAST_DURACION_MS);
+  }
+
+  /** Oculta el toast con animación de salida */
+  _ocultarToast() {
+    const toast = document.getElementById('aura-toast');
+    if (!toast) return;
+    toast.classList.remove('aura-toast--visible');
+    if (this._toastTimeout) {
+      clearTimeout(this._toastTimeout);
+      this._toastTimeout = null;
     }
-  }
-
-  /**
-   * Crea el botón de ayuda en el DOM.
-   * Se inserta una sola vez.
-   */
-  _crearBotonAyuda() {
-    if (document.getElementById('aura-btn-ayuda')) return;
-
-    const btn = document.createElement('button');
-    btn.id = 'aura-btn-ayuda';
-    btn.textContent = '¿Necesitas ayuda?';
-    btn.setAttribute('aria-label', 'Botón de ayuda — modo soporte activo');
-    btn.style.display = 'none';
-
-    btn.addEventListener('click', () => {
-      console.info('[UIAdapter] Usuario solicitó ayuda en modo soporte.');
-      document.dispatchEvent(new CustomEvent('aura:ayuda-solicitada'));
-    });
-
-    document.body.appendChild(btn);
   }
 
   // ──────────────────────────────── Estilos ────────────────────────────────
 
-  /**
-   * Inyecta los estilos base de Aura en <head>.
-   * Idempotente — solo se ejecuta una vez.
-   */
   _inyectarEstilos() {
     const STYLE_ID = 'aura-ui-adapter-styles';
     if (document.getElementById(STYLE_ID)) return;
@@ -205,24 +210,37 @@ export class UIAdapter {
 
 const CSS_VARS = {
   normal: {
-    '--aura-font-size-base':    '16px',
-    '--aura-bg':                '#F7F6F2',
-    '--aura-surface':           '#FFFFFF',
-    '--aura-text':              '#2C2C2A',
-    '--aura-text-secondary':    '#888780',
-    '--aura-border':            '#E4E2DA',
-    '--aura-card-radius':       '8px',
-    '--aura-spacing':           '1rem',
+    '--aura-font-size-base': '16px',
+    '--aura-bg':             '#F7F6F2',
+    '--aura-surface':        '#FFFFFF',
+    '--aura-text':           '#2C2C2A',
+    '--aura-text-secondary': '#888780',
+    '--aura-border':         '#E4E2DA',
+    '--aura-card-radius':    '8px',
+    '--aura-spacing':        '1rem',
+    '--aura-distractor-op':  '1',
   },
-  support: {
-    '--aura-font-size-base':    '18px',
-    '--aura-bg':                '#FFFFFF',
-    '--aura-surface':           '#F7F6F2',
-    '--aura-text':              '#1A1A18',
-    '--aura-text-secondary':    '#444441',
-    '--aura-border':            '#2C2C2A',
-    '--aura-card-radius':       '12px',
-    '--aura-spacing':           '1.5rem',
+  frustrado: {
+    '--aura-font-size-base': '18px',
+    '--aura-bg':             '#FFFFFF',
+    '--aura-surface':        '#F7F6F2',
+    '--aura-text':           '#1A1A18',
+    '--aura-text-secondary': '#444441',
+    '--aura-border':         '#2C2C2A',
+    '--aura-card-radius':    '12px',
+    '--aura-spacing':        '1.5rem',
+    '--aura-distractor-op':  '0',
+  },
+  concentrado: {
+    '--aura-font-size-base': '15px',
+    '--aura-bg':             '#F7F6F2',
+    '--aura-surface':        '#FFFFFF',
+    '--aura-text':           '#2C2C2A',
+    '--aura-text-secondary': '#888780',
+    '--aura-border':         '#E4E2DA',
+    '--aura-card-radius':    '8px',
+    '--aura-spacing':        '1rem',
+    '--aura-distractor-op':  '0.25',
   },
 };
 
@@ -230,7 +248,6 @@ const CSS_VARS = {
 
 const BASE_CSS = `
 
-/* ── Animaciones definidas ── */
 @keyframes aura-fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -259,17 +276,24 @@ main {
     background-color ${TRANSITION.color}ms ease,
     color            ${TRANSITION.color}ms ease,
     font-size        ${TRANSITION.color}ms ease,
-    border-color     ${TRANSITION.color}ms ease;
+    border-color     ${TRANSITION.color}ms ease,
+    opacity          ${TRANSITION.color}ms ease;
 }
 
-/* ── Estado base del body ── */
+/* ── Estado base ── */
 [data-aura-state] {
   font-size:  var(--aura-font-size-base, 16px);
   background: var(--aura-bg, #F7F6F2);
   color:      var(--aura-text, #2C2C2A);
 }
 
-/* ── Nav lateral ── */
+/* ════════════════════════════════════════════
+   MODO FRUSTRADO — body[data-aura-state="frustrado"]
+   Oculta menús secundarios, aumenta contraste,
+   muestra toast de ayuda activa.
+   ════════════════════════════════════════════ */
+
+/* Nav lateral — fade out */
 [data-aura-role="nav"] {
   opacity:    1;
   visibility: visible;
@@ -279,49 +303,12 @@ main {
     background-color ${TRANSITION.color}ms ease;
 }
 
-/* Oculta con fade — NO display:none directo */
-body.aura--support [data-aura-role="nav"] {
+body[data-aura-state="frustrado"] [data-aura-role="nav"] {
   opacity:    0;
   visibility: hidden;
 }
 
-/* ── Elementos secundarios ── */
-.aura-secondary,
-[data-aura-role="secondary"] {
-  opacity:    1;
-  visibility: visible;
-  max-height: 200px;
-  overflow:   hidden;
-  transition:
-    opacity    ${TRANSITION.ocultar}ms ease,
-    visibility ${TRANSITION.ocultar}ms ease,
-    max-height ${TRANSITION.ocultar}ms ease;
-}
-
-body.aura--support .aura-secondary,
-body.aura--support [data-aura-role="secondary"] {
-  opacity:    0;
-  visibility: hidden;
-  max-height: 0;
-}
-
-/* ── Notificaciones ── */
-.aura-notif,
-[data-aura-role="notificacion"] {
-  opacity:    1;
-  visibility: visible;
-  transition:
-    opacity    ${TRANSITION.ocultar}ms ease,
-    visibility ${TRANSITION.ocultar}ms ease;
-}
-
-body.aura--support .aura-notif,
-body.aura--support [data-aura-role="notificacion"] {
-  opacity:    0;
-  visibility: hidden;
-}
-
-/* ── Items secundarios del menú ── */
+/* Menú items secundarios */
 .aura-menu-item:not(.aura-menu-item--principal) {
   opacity:    1;
   max-height: 40px;
@@ -331,16 +318,78 @@ body.aura--support [data-aura-role="notificacion"] {
     max-height ${TRANSITION.ocultar}ms ease;
 }
 
-body.aura--support .aura-menu-item:not(.aura-menu-item--principal) {
+body[data-aura-state="frustrado"] .aura-menu-item:not(.aura-menu-item--principal) {
   opacity:    0;
   max-height: 0;
 }
 
-/* ── Cards — animación de entrada en modo soporte ── */
-body.aura--support .aura-card {
+/* Elementos secundarios — colapso suave */
+.aura-secondary,
+[data-aura-role="secondary"] {
+  opacity:    1;
+  max-height: 300px;
+  overflow:   hidden;
+  transition:
+    opacity    ${TRANSITION.ocultar}ms ease,
+    max-height ${TRANSITION.ocultar}ms ease;
+}
+
+body[data-aura-state="frustrado"] .aura-secondary,
+body[data-aura-state="frustrado"] [data-aura-role="secondary"] {
+  opacity:    0;
+  max-height: 0;
+}
+
+/* Notificaciones */
+.aura-notif,
+[data-aura-role="notificacion"] {
+  opacity:    1;
+  visibility: visible;
+  transition:
+    opacity    ${TRANSITION.ocultar}ms ease,
+    visibility ${TRANSITION.ocultar}ms ease;
+}
+
+body[data-aura-state="frustrado"] .aura-notif,
+body[data-aura-state="frustrado"] [data-aura-role="notificacion"] {
+  opacity:    0;
+  visibility: hidden;
+}
+
+/* Botones de acción — mayor contraste en frustrado */
+body[data-aura-state="frustrado"] button,
+body[data-aura-state="frustrado"] .aura-btn {
+  font-size:   1rem;
+  font-weight: 600;
+  min-height:  44px;
+  transition:  all ${TRANSITION.color}ms ease;
+}
+
+/* Cards — borde marcado y animación entrada */
+body[data-aura-state="frustrado"] .aura-card {
   border:        2px solid var(--aura-border);
   border-radius: var(--aura-card-radius);
   animation:     aura-fade-in ${TRANSITION.mostrar}ms ease forwards;
+}
+
+/* ════════════════════════════════════════════
+   MODO CONCENTRADO — body[data-aura-state="concentrado"]
+   Reduce opacidad de elementos distractores.
+   ════════════════════════════════════════════ */
+
+body[data-aura-state="concentrado"] .aura-secondary,
+body[data-aura-state="concentrado"] [data-aura-role="secondary"],
+body[data-aura-state="concentrado"] .aura-notif,
+body[data-aura-state="concentrado"] [data-aura-role="notificacion"],
+body[data-aura-state="concentrado"] .aura-menu-item:not(.aura-menu-item--principal) {
+  opacity:    var(--aura-distractor-op, 0.25);
+  transition: opacity ${TRANSITION.color}ms ease;
+}
+
+/* Cards en concentrado — sin animación brusca */
+body[data-aura-state="concentrado"] .aura-card {
+  opacity: 0.85;
+  transition: opacity ${TRANSITION.color}ms ease;
 }
 
 /* ── Sección principal ── */
@@ -348,56 +397,69 @@ body.aura--support .aura-card {
   padding: var(--aura-spacing, 1rem);
 }
 
-/* ── Indicador de transición en curso ── */
+/* ── Cursor durante transición ── */
 body.aura--transitioning {
   cursor: wait;
 }
 
-/* ── Botón de ayuda ── */
-#aura-btn-ayuda {
-  position:      fixed;
-  bottom:        2rem;
-  right:         2rem;
-  display:       none;
-  align-items:   center;
-  gap:           8px;
-  background:    #1D9E75;
-  color:         #FFFFFF;
-  font-size:     1rem;
-  font-weight:   600;
-  padding:       14px 24px;
-  border:        none;
-  border-radius: 999px;
-  cursor:        pointer;
-  z-index:       9999;
-  box-shadow:    0 4px 16px rgba(29, 158, 117, 0.4);
+/* ════════════════════════════════════════════
+   TOAST DE AYUDA ACTIVA
+   Aparece en la parte superior al entrar en
+   modo frustrado. Se auto-cierra en 4 segundos.
+   ════════════════════════════════════════════ */
 
-  /* Estado inicial — invisible y abajo */
-  opacity:   0;
-  transform: translateY(24px);
+#aura-toast {
+  position:        fixed;
+  top:             1.5rem;
+  left:            50%;
+  transform:       translateX(-50%) translateY(-120%);
+  background:      #1D9E75;
+  color:           #FFFFFF;
+  font-size:       14px;
+  font-weight:     500;
+  padding:         12px 20px;
+  border-radius:   999px;
+  display:         flex;
+  align-items:     center;
+  gap:             12px;
+  z-index:         9999;
+  box-shadow:      0 4px 16px rgba(29, 158, 117, 0.35);
+  opacity:         0;
   transition:
-    transform  ${TRANSITION.mostrar}ms ease,
-    box-shadow ${TRANSITION.mostrar}ms ease,
-    opacity    ${TRANSITION.mostrar}ms ease;
+    transform ${TRANSITION.mostrar}ms ease,
+    opacity   ${TRANSITION.mostrar}ms ease;
+  white-space: nowrap;
 }
 
-/* Clase que activa la animación de entrada */
-#aura-btn-ayuda.aura-btn-ayuda--visible {
+/* Clase que activa la entrada del toast */
+#aura-toast.aura-toast--visible {
   opacity:   1;
-  transform: translateY(0);
-  animation: aura-slide-up ${TRANSITION.mostrar}ms ease forwards;
+  transform: translateX(-50%) translateY(0);
 }
 
-#aura-btn-ayuda:hover {
-  transform:  translateY(-2px);
-  box-shadow: 0 6px 20px rgba(29, 158, 117, 0.5);
+#aura-toast-cerrar {
+  background:    rgba(255,255,255,0.25);
+  border:        none;
+  color:         #FFFFFF;
+  font-size:     16px;
+  font-weight:   600;
+  width:         24px;
+  height:        24px;
+  border-radius: 50%;
+  cursor:        pointer;
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  padding:       0;
+  line-height:   1;
+  transition:    background ${TRANSITION.ocultar}ms ease;
 }
 
-#aura-btn-ayuda:active {
-  transform: scale(0.97);
+#aura-toast-cerrar:hover {
+  background: rgba(255,255,255,0.4);
 }
 `;
 
 /**
- * @typedef {'normal' | 'support' | 'transitioning'} AdaptationState
+ * @typedef {'normal' | 'frustrado' | 'concentrado' | 'transitioning'} AdaptationState
  */
