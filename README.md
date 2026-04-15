@@ -55,7 +55,7 @@ affective-adaptive-ui/
 ---
 ## 🛠️ Stack Tecnológico
 * **Lenguaje:** JavaScript (ES6+ / **Módulos ESM**) / HTML5 / CSS3.
-* **IA de Visión:** `face-api.jspl` (detección de expresiones faciales).
+* **IA de Visión:** `face-api.js` (detección de expresiones faciales).
 * **Motor de ML:** `TensorFlow.js` (para el modelo de clasificación de estados).
 * **Base de Datos:** `Supabase` (Almacenamiento de telemetría anónima).
 * **Infraestructura:** Node.js v18+.

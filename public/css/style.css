@@ -1,0 +1,217 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --aura-font-size-base:    16px;
+    --aura-bg:                #F7F6F2;
+    --aura-surface:           #FFFFFF;
+    --aura-text:              #2C2C2A;
+    --aura-text-secondary:    #888780;
+    --aura-border:            #E4E2DA;
+    --aura-nav-display:       block;
+    --aura-secondary-display: block;
+    --aura-notif-display:     block;
+    --aura-card-radius:       8px;
+    --aura-spacing:           1rem;
+}
+
+body {
+    font-family:  system-ui, sans-serif;
+    font-size:    var(--aura-font-size-base);
+    background:   var(--aura-bg);
+    color:        var(--aura-text);
+    min-height:   100vh;
+    display:      grid;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows:    auto 1fr;
+    grid-template-areas:
+    "header header"
+    "nav    main";
+}
+
+/* ── Header ── */
+header {
+    grid-area:   header;
+    background:  var(--aura-surface);
+    border-bottom: 1px solid var(--aura-border);
+    padding:     12px 24px;
+    display:     flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+header h1 { font-size: 15px; font-weight: 600; }
+
+/* Notificaciones — se ocultan en modo soporte */
+.aura-notif {
+    display:     var(--aura-notif-display, block);
+    background:  #EAF3DE;
+    color:       #3B6D11;
+    font-size:   13px;
+    padding:     6px 14px;
+    border-radius: 999px;
+}
+
+/* ── Nav lateral ── */
+nav[data-aura-role="nav"] {
+    grid-area:   nav;
+    display:     var(--aura-nav-display, block);
+    background:  var(--aura-surface);
+    border-right: 1px solid var(--aura-border);
+    padding:     var(--aura-spacing);
+}
+
+nav h2 {
+    font-size:      12px;
+    color:          var(--aura-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin-bottom:  .75rem;
+}
+
+nav ul { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+nav a  {
+    display:       block;
+    padding:       6px 10px;
+    border-radius: 6px;
+    color:         var(--aura-text);
+    text-decoration: none;
+    font-size:     14px;
+}
+
+nav a:hover { background: #F1EFE8; }
+.aura-menu-item--principal { font-weight: 500; }
+
+/* Oculta items secundarios en modo soporte */
+body.aura--support .aura-menu-item:not(.aura-menu-item--principal) {
+    display: none;
+}
+
+/* ── Main ── */
+main {
+    grid-area: main;
+    padding:   calc(var(--aura-spacing) * 1.5);
+}
+
+/* ── Elementos secundarios ── */
+.aura-secondary {
+    display:       var(--aura-secondary-display, block);
+    background:    var(--aura-surface);
+    border:        1px solid var(--aura-border);
+    border-radius: var(--aura-card-radius);
+    padding:       var(--aura-spacing);
+    margin-bottom: 1rem;
+    font-size:     13px;
+    color:         var(--aura-text-secondary);
+}
+
+/* ── Cards ── */
+.card-grid {
+    display:               grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap:                   1rem;
+    margin-bottom:         1.5rem;
+}
+
+.aura-card {
+    background:    var(--aura-surface);
+    border:        1px solid var(--aura-border);
+    border-radius: var(--aura-card-radius);
+    padding:       var(--aura-spacing);
+}
+
+.aura-card h3   { font-size: 12px; color: var(--aura-text-secondary); margin-bottom: .4rem; }
+.aura-card .val { font-size: 1.5rem; font-weight: 600; }
+
+/* ── Área de escritura ── */
+.aura-section { padding: var(--aura-spacing); }
+
+textarea {
+    width:       100%;
+    min-height:  120px;
+    border:      1px solid var(--aura-border);
+    border-radius: 6px;
+    padding:     10px 12px;
+    font-size:   var(--aura-font-size-base);
+    font-family: inherit;
+    resize:      vertical;
+    background:  var(--aura-surface);
+    color:       var(--aura-text);
+    outline:     none;
+}
+textarea:focus { border-color: #1D9E75; }
+
+/* ── Panel de telemetría ── */
+#telemetria {
+    position:      fixed;
+    top:           1rem;
+    right:         1rem;
+    background:    var(--aura-surface);
+    border:        1px solid var(--aura-border);
+    border-radius: 10px;
+    padding:       14px 18px;
+    font-size:     12px;
+    font-family:   monospace;
+    min-width:     260px;
+    line-height:   1.9;
+    z-index:       100;
+}
+
+#telemetria strong {
+    display:       block;
+    font-size:     11px;
+    color:         var(--aura-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 6px;
+}
+
+.tel-row { display: flex; justify-content: space-between; gap: 12px; }
+.tel-label { color: var(--aura-text-secondary); }
+.tel-val   { font-weight: 600; color: var(--aura-text); }
+
+/* ── Barra de estado ── */
+#estado-bar {
+    position:      fixed;
+    bottom:        1.5rem;
+    left:          50%;
+    transform:     translateX(-50%);
+    background:    var(--aura-surface);
+    border:        1px solid var(--aura-border);
+    border-radius: 999px;
+    padding:       8px 20px;
+    font-size:     13px;
+    display:       flex;
+    align-items:   center;
+    gap:           8px;
+}
+
+.estado-dot {
+    width:         8px;
+    height:        8px;
+    border-radius: 50%;
+    background:    #639922;
+    transition:    background 400ms ease;
+}
+
+body.aura--support .estado-dot { background: #D85A30; }
+
+/* ── Controles de demo ── */
+#demo-controles {
+    display:   flex;
+    gap:       8px;
+    margin-bottom: 1rem;
+}
+
+#demo-controles button {
+    padding:       8px 16px;
+    border:        1px solid var(--aura-border);
+    border-radius: 6px;
+    background:    var(--aura-surface);
+    color:         var(--aura-text);
+    font-size:     13px;
+    cursor:        pointer;
+}
+
+#demo-controles button:hover { background: #F1EFE8; }
+#demo-controles .btn-soporte { border-color: #D85A30; color: #D85A30; }
+#demo-controles .btn-normal  { border-color: #1D9E75; color: #1D9E75; }
