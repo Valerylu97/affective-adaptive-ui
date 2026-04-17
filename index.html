@@ -218,6 +218,65 @@
     #demo-controles .btn-soporte { border-color: #D85A30; color: #D85A30; }
     #demo-controles .btn-normal       { border-color: #1D9E75; color: #1D9E75; }
     #demo-controles .btn-concentrado  { border-color: #185FA5; color: #185FA5; }
+    /* ── Panel A/B Testing ── */
+    #panel-ab {
+      position:      fixed;
+      bottom:        1.5rem;
+      left:          1.5rem;
+      background:    var(--aura-surface);
+      border:        1px solid var(--aura-border);
+      border-radius: 10px;
+      padding:       14px 18px;
+      font-size:     12px;
+      font-family:   monospace;
+      min-width:     280px;
+      line-height:   1.9;
+      z-index:       100;
+    }
+
+    #panel-ab strong {
+      display:        block;
+      font-size:      11px;
+      color:          var(--aura-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom:  6px;
+    }
+
+    .ab-row { display: flex; justify-content: space-between; gap: 12px; }
+    .ab-label { color: var(--aura-text-secondary); }
+    .ab-val   { font-weight: 600; color: var(--aura-text); }
+    .ab-conclusion {
+      margin-top:  8px;
+      font-size:   11px;
+      color:       var(--aura-text-secondary);
+      line-height: 1.5;
+      border-top:  1px solid var(--aura-border);
+      padding-top: 6px;
+    }
+
+    #panel-ab-controles {
+      display:    flex;
+      gap:        6px;
+      margin-top: 8px;
+    }
+
+    #panel-ab-controles button {
+      flex:          1;
+      padding:       5px 8px;
+      border:        1px solid var(--aura-border);
+      border-radius: 6px;
+      background:    var(--aura-surface);
+      color:         var(--aura-text);
+      font-size:     11px;
+      cursor:        pointer;
+      font-family:   monospace;
+    }
+
+    #panel-ab-controles button:hover { background: #F1EFE8; }
+    #btn-ab-iniciar   { border-color: #185FA5; color: #185FA5; }
+    #btn-ab-completar { border-color: #1D9E75; color: #1D9E75; }
+    #btn-ab-reiniciar { border-color: #D85A30; color: #D85A30; }
   </style>
 </head>
 <body class="aura--normal" data-aura-state="normal">
@@ -282,7 +341,21 @@
     <div class="tel-row"><span class="tel-label">T. vuelo (flight)</span> <span class="tel-val" id="t-fl">—</span></div>
     <div class="tel-row"><span class="tel-label">Muestras</span>    <span class="tel-val" id="t-buf">0</span></div>
   </div>
-
+  
+  <!-- Panel A/B Testing -->
+  <div id="panel-ab">
+    <strong>A/B Testing — Tiempo de tarea</strong>
+    <div class="ab-row"><span class="ab-label">Grupo A (normal)</span>   <span class="ab-val" id="ab-grupo-a">—</span></div>
+    <div class="ab-row"><span class="ab-label">Grupo B (soporte)</span>  <span class="ab-val" id="ab-grupo-b">—</span></div>
+    <div class="ab-row"><span class="ab-label">Diferencia</span>         <span class="ab-val" id="ab-diferencia">—</span></div>
+    <div class="ab-row"><span class="ab-label">Tareas totales</span>     <span class="ab-val" id="ab-total">0</span></div>
+    <div class="ab-conclusion" id="ab-conclusion">Sin datos aún.</div>
+    <div id="panel-ab-controles">
+      <button id="btn-ab-iniciar">▶ Iniciar tarea</button>
+      <button id="btn-ab-completar">✓ Completar</button>
+      <button id="btn-ab-reiniciar">↺ Reiniciar</button>
+    </div>
+  </div>
   <!-- Barra de estado -->
   <div id="estado-bar">
     <div class="estado-dot"></div>
@@ -292,6 +365,7 @@
   <!-- Sensores + UIAdapter inline -->
   <script type="module">
     import { UIAdapter }                                          from './src/ui/UIAdapter.js';
+    import { ABTesting }                                          from './src/ab-testing.js';
     import { bufferGlobal, startSensors, stopSensors, isSensing } from './src/sensors/sensors.js';
 
     // Inicia la captura al cargar la página
@@ -304,7 +378,39 @@
         document.getElementById('estado-label').textContent = to;
       },
     });
+    
+    // A/B Testing
+    const ab = new ABTesting(adapter);
 
+    function actualizarPanelAB() {
+      const res = ab.obtenerResultados();
+      const fmtMs = ms => ms > 0 ? ms + ' ms' : '—';
+
+      document.getElementById('ab-grupo-a').textContent    = `${fmtMs(res.grupoA.promedioMs)} (${res.grupoA.tareas} tareas)`;
+      document.getElementById('ab-grupo-b').textContent    = `${fmtMs(res.grupoB.promedioMs)} (${res.grupoB.tareas} tareas)`;
+      document.getElementById('ab-diferencia').textContent = res.diferenciaMsMs !== 0 ? res.diferenciaMsMs + ' ms' : '—';
+      document.getElementById('ab-total').textContent      = res.totalTareas;
+      document.getElementById('ab-conclusion').textContent = res.conclusion;
+    }
+
+    document.getElementById('btn-ab-iniciar').addEventListener('click', () => {
+      ab.iniciarTarea();
+      document.getElementById('btn-ab-iniciar').textContent = '⏳ En curso...';
+    });
+
+    document.getElementById('btn-ab-completar').addEventListener('click', () => {
+      const resultado = ab.completarTarea();
+      if (resultado) {
+        document.getElementById('btn-ab-iniciar').textContent = '▶ Iniciar tarea';
+        actualizarPanelAB();
+      }
+    });
+
+    document.getElementById('btn-ab-reiniciar').addEventListener('click', () => {
+      ab.reiniciar();
+      document.getElementById('btn-ab-iniciar').textContent = '▶ Iniciar tarea';
+      actualizarPanelAB();
+    });
     // Botones de demo — addEventListener en lugar de onclick
     document.getElementById('btn-frustrado').addEventListener('click', () => {
       adapter.applyAdaptation('frustrado');
