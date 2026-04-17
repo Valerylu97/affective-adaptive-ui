@@ -28,8 +28,6 @@ const TRANSITION = {
   retraso: 150,
 };
 
-/** Tiempo en ms antes de que el toast se auto-cierre */
-const TOAST_DURACION_MS = 4000;
 
 export class UIAdapter {
   /**
@@ -45,6 +43,13 @@ export class UIAdapter {
     this._estadoActual   = 'normal';
     this._transicionando = false;
     this._toastTimeout   = null;
+
+    this._umbralesVisuales = {
+      frustrado:     0.45,
+      concentrado:   0.70,
+      transicion:    TRANSITION.color,
+      toastDuracion: 4000,
+    };
 
     this._inyectarEstilos();
     this._crearToast();
@@ -83,6 +88,55 @@ export class UIAdapter {
   reset() {
     this._estadoActual   = this._estadoActual === 'transitioning' ? 'normal' : this._estadoActual;
     this._transicionando = false;
+    this.applyAdaptation('normal');
+  }
+
+  /**
+   * Ajusta umbrales visuales basados en pruebas con usuarios S3.
+   * Compatible con valores que entregará Face-api.js de José Miguel.
+   * @param {Object} nuevosUmbrales
+   * @param {number} [nuevosUmbrales.frustrado]     0-1
+   * @param {number} [nuevosUmbrales.concentrado]   0-1
+   * @param {number} [nuevosUmbrales.transicion]    ms
+   * @param {number} [nuevosUmbrales.toastDuracion] ms
+   */
+  setUmbralesVisuales(nuevosUmbrales = {}) {
+    this._umbralesVisuales = { ...this._umbralesVisuales, ...nuevosUmbrales };
+    console.info('[UIAdapter] Umbrales visuales actualizados:', this._umbralesVisuales);
+  }
+
+  /** @returns {typeof this._umbralesVisuales} */
+  getUmbralesVisuales() {
+    return { ...this._umbralesVisuales };
+  }
+
+  /**
+   * Evalúa probabilidades de Face-api.js y aplica el estado correspondiente.
+   * José Miguel llama este método desde su clasificador ML en S3.
+   * @param {Object} probabilidades
+   * @param {number} [probabilidades.angry]
+   * @param {number} [probabilidades.disgusted]
+   * @param {number} [probabilidades.fearful]
+   * @param {number} [probabilidades.neutral]
+   */
+  evaluarExpresion(probabilidades) {
+    const { frustrado, concentrado } = this._umbralesVisuales;
+
+    const sumaNegativos =
+      (probabilidades.angry     ?? 0) +
+      (probabilidades.disgusted ?? 0) +
+      (probabilidades.fearful   ?? 0);
+
+    if (sumaNegativos >= frustrado) {
+      this.applyAdaptation('frustrado');
+      return;
+    }
+
+    if ((probabilidades.neutral ?? 0) >= concentrado) {
+      this.applyAdaptation('concentrado');
+      return;
+    }
+
     this.applyAdaptation('normal');
   }
 
@@ -179,7 +233,10 @@ export class UIAdapter {
 
     // Limpia timeout anterior si existía
     if (this._toastTimeout) clearTimeout(this._toastTimeout);
-    this._toastTimeout = setTimeout(() => this._ocultarToast(), TOAST_DURACION_MS);
+    this._toastTimeout = setTimeout(
+      () => this._ocultarToast(),
+      this._umbralesVisuales.toastDuracion,
+    );
   }
 
   /** Oculta el toast con animación de salida */
