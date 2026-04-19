@@ -3,6 +3,8 @@
  * Estructura de Telemetría - Semana 1
  */
 
+import { checkEmotionalState } from './src/logic/engine.js';
+
 // 1. Objeto Global de Almacenamiento Temporal (Buffer)
 export const IAE_DataBuffer = [];
 
@@ -17,7 +19,7 @@ export const recordTelemetry = (type, data) => {
     };
     
     IAE_DataBuffer.push(entry);
-    
+    checkEmotionalState(entry);
      
     console.log(`[IAE Heartbeat] Evento registrado: ${type}`);
 };
