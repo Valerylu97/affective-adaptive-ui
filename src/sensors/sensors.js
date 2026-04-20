@@ -23,6 +23,35 @@ const MAX_JITTER_PX    = 200;
 const MAX_DWELL_MS     = 500;
 const MAX_FLIGHT_MS    = 2000;
 
+/**
+ * Umbrales ajustables — se modifican con setUmbrales()
+ * después de pruebas con usuarios S3.
+ */
+let _umbrales = {
+  velocidad: MAX_VELOCIDAD_PX,
+  jitter:    MAX_JITTER_PX,
+  dwell:     MAX_DWELL_MS,
+  flight:    MAX_FLIGHT_MS,
+};
+
+/**
+ * Ajusta los umbrales de normalización basados en pruebas con usuarios.
+ * @param {Object} nuevosUmbrales
+ * @param {number} [nuevosUmbrales.velocidad]
+ * @param {number} [nuevosUmbrales.jitter]
+ * @param {number} [nuevosUmbrales.dwell]
+ * @param {number} [nuevosUmbrales.flight]
+ */
+export function setUmbrales(nuevosUmbrales = {}) {
+  _umbrales = { ..._umbrales, ...nuevosUmbrales };
+  console.info('[Sensors] Umbrales actualizados:', _umbrales);
+}
+
+/** @returns {typeof _umbrales} */
+export function getUmbrales() {
+  return { ..._umbrales };
+}
+
 // ─────────────────────────── Acumulador de mouse ────────────────────────────
 // Optimización: en lugar de un array que crece con cada mousemove,
 // solo guardamos la suma y el conteo para calcular el promedio al final.
@@ -207,10 +236,10 @@ function _calcularMetricas() {
 
 function _normalizar(metricas) {
   return {
-    velocidadMouse: Math.min(metricas.velocidadMouse / MAX_VELOCIDAD_PX, 1),
-    jitter:         Math.min(metricas.jitter         / MAX_JITTER_PX,    1),
-    dwellTime:      Math.min(metricas.dwellTime      / MAX_DWELL_MS,     1),
-    flightTime:     Math.min(metricas.flightTime     / MAX_FLIGHT_MS,    1),
+    velocidadMouse: Math.min(metricas.velocidadMouse / _umbrales.velocidad, 1),
+    jitter:         Math.min(metricas.jitter         / _umbrales.jitter,    1),
+    dwellTime:      Math.min(metricas.dwellTime      / _umbrales.dwell,     1),
+    flightTime:     Math.min(metricas.flightTime     / _umbrales.flight,    1),
   };
 }
 

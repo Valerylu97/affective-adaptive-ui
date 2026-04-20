@@ -1,23 +1,33 @@
 /**
  * @module UIAdapter
  * @description Semana 2 — Expressing (Bucle de Picard)
- * Implementa las dos variantes visuales de la interfaz y la
- * lógica de transición según el estado emocional detectado.
+ * Semana 3 — Refinamiento Seamless
  *
- * Modos:
- *   'normal'   → Interfaz completa con menús y notificaciones
- *   'support'  → Modo Soporte: elementos no esenciales ocultos,
- *                mayor contraste, botón de ayuda destacado
+ * Implementa tres variantes visuales de la interfaz:
+ *   'normal'     → Interfaz completa con menús y notificaciones
+ *   'frustrado'  → Modo Soporte: oculta menús, aumenta contraste, muestra toast
+ *   'concentrado'→ Modo Zen: reduce opacidad de elementos distractores
+ *
+ * El motor de Valeria escribe en body[data-aura-state] y la UI reacciona
+ * automáticamente sin recargar la página.
  *
  * @author Xavi
- * @version 2.0.0
+ * @version 4.0.0
  */
 
 /** @type {AdaptationState[]} */
-const ESTADOS_VALIDOS = ['normal', 'support'];
+const ESTADOS_VALIDOS = ['normal', 'frustrado', 'concentrado'];
 
-/** Duración de transición CSS en ms — evita cambios bruscos */
-const TRANSITION_MS = 400;
+/**
+ * Duraciones de transición en ms — escalonadas para evitar cambios bruscos.
+ */
+const TRANSITION = {
+  ocultar: 300,
+  mostrar: 400,
+  color:   500,
+  retraso: 150,
+};
+
 
 export class UIAdapter {
   /**
@@ -30,19 +40,28 @@ export class UIAdapter {
     this.onStateChange = options.onStateChange ?? null;
 
     /** @type {AdaptationState} */
-    this._estadoActual = 'normal';
+    this._estadoActual   = 'normal';
+    this._transicionando = false;
+    this._toastTimeout   = null;
+
+    this._umbralesVisuales = {
+      frustrado:     0.45,
+      concentrado:   0.70,
+      transicion:    TRANSITION.color,
+      toastDuracion: 4000,
+    };
 
     this._inyectarEstilos();
-    this._crearBotonAyuda();
+    this._crearToast();
   }
 
   // ─────────────────────────────── Public API ─────────────────────────────
 
   /**
-   * Cambia las clases CSS de la interfaz según el estado detectado.
-   * No recarga la página — usa solo manipulación de clases y CSS vars.
+   * Cambia la interfaz según el estado emocional detectado.
+   * Reacciona al atributo data-aura-state sin recargar la página.
    *
-   * @param {AdaptationState} state  'normal' | 'support'
+   * @param {AdaptationState} state  'normal' | 'frustrado' | 'concentrado'
    */
   applyAdaptation(state) {
     if (!ESTADOS_VALIDOS.includes(state)) {
@@ -51,15 +70,13 @@ export class UIAdapter {
     }
 
     if (state === this._estadoActual) return;
+    if (this._transicionando) return;
 
-    const anterior = this._estadoActual;
-    this._estadoActual = state;
+    const anterior       = this._estadoActual;
+    this._estadoActual   = 'transitioning';
+    this._transicionando = true;
 
-    this._actualizarDOM(state);
-
-    if (typeof this.onStateChange === 'function') {
-      this.onStateChange({ from: anterior, to: state });
-    }
+    this._transicionEscalonada(state, anterior);
   }
 
   /** @returns {AdaptationState} */
@@ -69,71 +86,172 @@ export class UIAdapter {
 
   /** Regresa al modo normal */
   reset() {
+    this._estadoActual   = this._estadoActual === 'transitioning' ? 'normal' : this._estadoActual;
+    this._transicionando = false;
     this.applyAdaptation('normal');
   }
 
-  // ──────────────────────────── DOM Mutations ──────────────────────────────
+  /**
+   * Ajusta umbrales visuales basados en pruebas con usuarios S3.
+   * Compatible con valores que entregará Face-api.js de José Miguel.
+   * @param {Object} nuevosUmbrales
+   * @param {number} [nuevosUmbrales.frustrado]     0-1
+   * @param {number} [nuevosUmbrales.concentrado]   0-1
+   * @param {number} [nuevosUmbrales.transicion]    ms
+   * @param {number} [nuevosUmbrales.toastDuracion] ms
+   */
+  setUmbralesVisuales(nuevosUmbrales = {}) {
+    this._umbralesVisuales = { ...this._umbralesVisuales, ...nuevosUmbrales };
+    console.info('[UIAdapter] Umbrales visuales actualizados:', this._umbralesVisuales);
+  }
+
+  /** @returns {typeof this._umbralesVisuales} */
+  getUmbralesVisuales() {
+    return { ...this._umbralesVisuales };
+  }
 
   /**
-   * Aplica el estado al DOM mediante clases y CSS custom properties.
-   * @param {AdaptationState} state
+   * Evalúa probabilidades de Face-api.js y aplica el estado correspondiente.
+   * José Miguel llama este método desde su clasificador ML en S3.
+   * @param {Object} probabilidades
+   * @param {number} [probabilidades.angry]
+   * @param {number} [probabilidades.disgusted]
+   * @param {number} [probabilidades.fearful]
+   * @param {number} [probabilidades.neutral]
    */
-  _actualizarDOM(state) {
-    const root = document.querySelector(this.rootSelector);
-    if (!root) {
-      console.error(`[UIAdapter] Selector no encontrado: "${this.rootSelector}"`);
+  evaluarExpresion(probabilidades) {
+    const { frustrado, concentrado } = this._umbralesVisuales;
+
+    const sumaNegativos =
+      (probabilidades.angry     ?? 0) +
+      (probabilidades.disgusted ?? 0) +
+      (probabilidades.fearful   ?? 0);
+
+    if (sumaNegativos >= frustrado) {
+      this.applyAdaptation('frustrado');
       return;
     }
 
-    // Limpia clases anteriores
-    ESTADOS_VALIDOS.forEach(s => root.classList.remove(`aura--${s}`));
-
-    // Aplica nuevo estado
-    root.classList.add(`aura--${state}`);
-    root.dataset.auraState = state;
-
-    // Aplica CSS vars del estado
-    const vars = CSS_VARS[state];
-    Object.entries(vars).forEach(([prop, val]) => {
-      root.style.setProperty(prop, val);
-    });
-
-    // Muestra u oculta el botón de ayuda
-    const btnAyuda = document.getElementById('aura-btn-ayuda');
-    if (btnAyuda) {
-      btnAyuda.style.display = state === 'support' ? 'flex' : 'none';
+    if ((probabilidades.neutral ?? 0) >= concentrado) {
+      this.applyAdaptation('concentrado');
+      return;
     }
+
+    this.applyAdaptation('normal');
   }
 
-  // ─────────────────────────── Botón de ayuda ─────────────────────────────
+  // ──────────────────────────── Transición escalonada ─────────────────────
 
   /**
-   * Crea el botón de ayuda destacado que aparece en modo Soporte.
-   * Se inserta una sola vez en el DOM.
+   * Orquesta el cambio en 3 fases para evitar el efecto brusco:
+   *   Fase 1 — marca transitioning
+   *   Fase 2 — aplica clases y CSS vars (con retraso)
+   *   Fase 3 — limpia y notifica
+   *
+   * @param {AdaptationState} state
+   * @param {AdaptationState} anterior
    */
-  _crearBotonAyuda() {
-    if (document.getElementById('aura-btn-ayuda')) return;
+  _transicionEscalonada(state, anterior) {
+    const root = document.querySelector(this.rootSelector);
+    if (!root) return;
 
-    const btn = document.createElement('button');
-    btn.id          = 'aura-btn-ayuda';
-    btn.textContent = '¿Necesitas ayuda?';
-    btn.setAttribute('aria-label', 'Botón de ayuda — modo soporte activo');
-    btn.style.display = 'none';
+    // Fase 1 — indica que está en transición
+    root.classList.add('aura--transitioning');
 
-    btn.addEventListener('click', () => {
-      console.info('[UIAdapter] Usuario solicitó ayuda en modo soporte.');
-      document.dispatchEvent(new CustomEvent('aura:ayuda-solicitada'));
-    });
+    // Fase 2 — aplica el nuevo estado
+    setTimeout(() => {
+      ESTADOS_VALIDOS.forEach(s => root.classList.remove(`aura--${s}`));
+      root.classList.add(`aura--${state}`);
+      root.dataset.auraState = state;
 
-    document.body.appendChild(btn);
+      const vars = CSS_VARS[state];
+      Object.entries(vars).forEach(([prop, val]) => {
+        root.style.setProperty(prop, val);
+      });
+
+      // Muestra el toast solo en modo frustrado
+      if (state === 'frustrado') {
+        this._mostrarToast('Modo soporte activado — estamos aquí para ayudarte.');
+      } else {
+        this._ocultarToast();
+      }
+
+    }, TRANSITION.retraso);
+
+    // Fase 3 — limpia y notifica
+    setTimeout(() => {
+      root.classList.remove('aura--transitioning');
+      this._estadoActual   = state;
+      this._transicionando = false;
+
+      if (typeof this.onStateChange === 'function') {
+        this.onStateChange({ from: anterior, to: state });
+      }
+    }, TRANSITION.retraso + TRANSITION.color);
+  }
+
+  // ──────────────────────────── Toast de ayuda ────────────────────────────
+
+  /**
+   * Crea el elemento toast en el DOM — solo una vez.
+   * El toast reemplaza al botón fijo de S2 con una notificación contextual.
+   */
+  _crearToast() {
+    if (document.getElementById('aura-toast')) return;
+
+    const toast = document.createElement('div');
+    toast.id = 'aura-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+
+    // Botón de cierre manual
+    const btnCerrar = document.createElement('button');
+    btnCerrar.id          = 'aura-toast-cerrar';
+    btnCerrar.textContent = '×';
+    btnCerrar.setAttribute('aria-label', 'Cerrar notificación');
+    btnCerrar.addEventListener('click', () => this._ocultarToast());
+
+    const mensaje = document.createElement('span');
+    mensaje.id = 'aura-toast-mensaje';
+
+    toast.appendChild(mensaje);
+    toast.appendChild(btnCerrar);
+    document.body.appendChild(toast);
+  }
+
+  /**
+   * Muestra el toast con un mensaje y lo auto-cierra después de TOAST_DURACION_MS.
+   * @param {string} mensaje
+   */
+  _mostrarToast(mensaje) {
+    const toast   = document.getElementById('aura-toast');
+    const spanMsg = document.getElementById('aura-toast-mensaje');
+    if (!toast || !spanMsg) return;
+
+    spanMsg.textContent = mensaje;
+    toast.classList.add('aura-toast--visible');
+
+    // Limpia timeout anterior si existía
+    if (this._toastTimeout) clearTimeout(this._toastTimeout);
+    this._toastTimeout = setTimeout(
+      () => this._ocultarToast(),
+      this._umbralesVisuales.toastDuracion,
+    );
+  }
+
+  /** Oculta el toast con animación de salida */
+  _ocultarToast() {
+    const toast = document.getElementById('aura-toast');
+    if (!toast) return;
+    toast.classList.remove('aura-toast--visible');
+    if (this._toastTimeout) {
+      clearTimeout(this._toastTimeout);
+      this._toastTimeout = null;
+    }
   }
 
   // ──────────────────────────────── Estilos ────────────────────────────────
 
-  /**
-   * Inyecta en <head> los estilos base de Aura.
-   * Idempotente — solo se ejecuta una vez.
-   */
   _inyectarEstilos() {
     const STYLE_ID = 'aura-ui-adapter-styles';
     if (document.getElementById(STYLE_ID)) return;
@@ -149,113 +267,256 @@ export class UIAdapter {
 
 const CSS_VARS = {
   normal: {
-    '--aura-font-size-base':    '16px',
-    '--aura-bg':                '#F7F6F2',
-    '--aura-surface':           '#FFFFFF',
-    '--aura-text':              '#2C2C2A',
-    '--aura-text-secondary':    '#888780',
-    '--aura-border':            '#E4E2DA',
-    '--aura-nav-display':       'block',
-    '--aura-secondary-display': 'block',
-    '--aura-notif-display':     'block',
-    '--aura-card-radius':       '8px',
-    '--aura-spacing':           '1rem',
+    '--aura-font-size-base': '16px',
+    '--aura-bg':             '#F7F6F2',
+    '--aura-surface':        '#FFFFFF',
+    '--aura-text':           '#2C2C2A',
+    '--aura-text-secondary': '#888780',
+    '--aura-border':         '#E4E2DA',
+    '--aura-card-radius':    '8px',
+    '--aura-spacing':        '1rem',
+    '--aura-distractor-op':  '1',
   },
-  support: {
-    '--aura-font-size-base':    '18px',
-    '--aura-bg':                '#FFFFFF',
-    '--aura-surface':           '#F7F6F2',
-    '--aura-text':              '#1A1A18',
-    '--aura-text-secondary':    '#444441',
-    '--aura-border':            '#2C2C2A',
-    '--aura-nav-display':       'none',
-    '--aura-secondary-display': 'none',
-    '--aura-notif-display':     'none',
-    '--aura-card-radius':       '12px',
-    '--aura-spacing':           '1.5rem',
+  frustrado: {
+    '--aura-font-size-base': '18px',
+    '--aura-bg':             '#FFFFFF',
+    '--aura-surface':        '#F7F6F2',
+    '--aura-text':           '#1A1A18',
+    '--aura-text-secondary': '#444441',
+    '--aura-border':         '#2C2C2A',
+    '--aura-card-radius':    '12px',
+    '--aura-spacing':        '1.5rem',
+    '--aura-distractor-op':  '0',
+  },
+  concentrado: {
+    '--aura-font-size-base': '15px',
+    '--aura-bg':             '#F7F6F2',
+    '--aura-surface':        '#FFFFFF',
+    '--aura-text':           '#2C2C2A',
+    '--aura-text-secondary': '#888780',
+    '--aura-border':         '#E4E2DA',
+    '--aura-card-radius':    '8px',
+    '--aura-spacing':        '1rem',
+    '--aura-distractor-op':  '0.25',
   },
 };
 
 // ──────────────────────────────── Base CSS ───────────────────────────────────
 
 const BASE_CSS = `
+
+@keyframes aura-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes aura-slide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes aura-slide-down {
+  from { opacity: 1; transform: translateY(0);    }
+  to   { opacity: 0; transform: translateY(24px); }
+}
+
+/* ── Transiciones limitadas a contenedores principales ── */
 body,
 nav[data-aura-role="nav"],
 .aura-secondary,
 .aura-notif,
 .aura-card,
 .aura-section,
-#aura-btn-ayuda {
+header,
+main {
   transition:
-    background-color ${TRANSITION_MS}ms ease,
-    color            ${TRANSITION_MS}ms ease,
-    font-size        ${TRANSITION_MS}ms ease,
-    border-color     ${TRANSITION_MS}ms ease,
-    opacity          ${TRANSITION_MS}ms ease;
+    background-color ${TRANSITION.color}ms ease,
+    color            ${TRANSITION.color}ms ease,
+    font-size        ${TRANSITION.color}ms ease,
+    border-color     ${TRANSITION.color}ms ease,
+    opacity          ${TRANSITION.color}ms ease;
 }
 
+/* ── Estado base ── */
 [data-aura-state] {
   font-size:  var(--aura-font-size-base, 16px);
   background: var(--aura-bg, #F7F6F2);
   color:      var(--aura-text, #2C2C2A);
 }
 
-.aura-nav,
+/* ════════════════════════════════════════════
+   MODO FRUSTRADO — body[data-aura-state="frustrado"]
+   Oculta menús secundarios, aumenta contraste,
+   muestra toast de ayuda activa.
+   ════════════════════════════════════════════ */
+
+/* Nav lateral — fade out */
 [data-aura-role="nav"] {
-  display: var(--aura-nav-display, block);
+  opacity:    1;
+  visibility: visible;
+  transition:
+    opacity    ${TRANSITION.ocultar}ms ease,
+    visibility ${TRANSITION.ocultar}ms ease,
+    background-color ${TRANSITION.color}ms ease;
 }
 
+body[data-aura-state="frustrado"] [data-aura-role="nav"] {
+  opacity:    0;
+  visibility: hidden;
+}
+
+/* Menú items secundarios */
+.aura-menu-item:not(.aura-menu-item--principal) {
+  opacity:    1;
+  max-height: 40px;
+  overflow:   hidden;
+  transition:
+    opacity    ${TRANSITION.ocultar}ms ease,
+    max-height ${TRANSITION.ocultar}ms ease;
+}
+
+body[data-aura-state="frustrado"] .aura-menu-item:not(.aura-menu-item--principal) {
+  opacity:    0;
+  max-height: 0;
+}
+
+/* Elementos secundarios — colapso suave */
 .aura-secondary,
 [data-aura-role="secondary"] {
-  display: var(--aura-secondary-display, block);
+  opacity:    1;
+  max-height: 300px;
+  overflow:   hidden;
+  transition:
+    opacity    ${TRANSITION.ocultar}ms ease,
+    max-height ${TRANSITION.ocultar}ms ease;
 }
 
+body[data-aura-state="frustrado"] .aura-secondary,
+body[data-aura-state="frustrado"] [data-aura-role="secondary"] {
+  opacity:    0;
+  max-height: 0;
+}
+
+/* Notificaciones */
 .aura-notif,
 [data-aura-role="notificacion"] {
-  display: var(--aura-notif-display, block);
+  opacity:    1;
+  visibility: visible;
+  transition:
+    opacity    ${TRANSITION.ocultar}ms ease,
+    visibility ${TRANSITION.ocultar}ms ease;
 }
 
+body[data-aura-state="frustrado"] .aura-notif,
+body[data-aura-state="frustrado"] [data-aura-role="notificacion"] {
+  opacity:    0;
+  visibility: hidden;
+}
+
+/* Botones de acción — mayor contraste en frustrado */
+body[data-aura-state="frustrado"] button,
+body[data-aura-state="frustrado"] .aura-btn {
+  font-size:   1rem;
+  font-weight: 600;
+  min-height:  44px;
+  transition:  all ${TRANSITION.color}ms ease;
+}
+
+/* Cards — borde marcado y animación entrada */
+body[data-aura-state="frustrado"] .aura-card {
+  border:        2px solid var(--aura-border);
+  border-radius: var(--aura-card-radius);
+  animation:     aura-fade-in ${TRANSITION.mostrar}ms ease forwards;
+}
+
+/* ════════════════════════════════════════════
+   MODO CONCENTRADO — body[data-aura-state="concentrado"]
+   Reduce opacidad de elementos distractores.
+   ════════════════════════════════════════════ */
+
+body[data-aura-state="concentrado"] .aura-secondary,
+body[data-aura-state="concentrado"] [data-aura-role="secondary"],
+body[data-aura-state="concentrado"] .aura-notif,
+body[data-aura-state="concentrado"] [data-aura-role="notificacion"],
+body[data-aura-state="concentrado"] .aura-menu-item:not(.aura-menu-item--principal) {
+  opacity:    var(--aura-distractor-op, 0.25);
+  transition: opacity ${TRANSITION.color}ms ease;
+}
+
+/* Cards en concentrado — sin animación brusca */
+body[data-aura-state="concentrado"] .aura-card {
+  opacity: 0.85;
+  transition: opacity ${TRANSITION.color}ms ease;
+}
+
+/* ── Sección principal ── */
 [data-aura-state] .aura-section {
   padding: var(--aura-spacing, 1rem);
 }
 
-[data-aura-state="aura--support"] .aura-card {
-  border:        2px solid var(--aura-border);
-  border-radius: var(--aura-card-radius);
+/* ── Cursor durante transición ── */
+body.aura--transitioning {
+  cursor: wait;
 }
 
-#aura-btn-ayuda {
-  position:      fixed;
-  bottom:        2rem;
-  right:         2rem;
-  display:       none;
-  align-items:   center;
-  gap:           8px;
-  background:    #1D9E75;
-  color:         #FFFFFF;
-  font-size:     1rem;
-  font-weight:   600;
-  padding:       14px 24px;
-  border:        none;
-  border-radius: 999px;
-  cursor:        pointer;
-  z-index:       9999;
-  box-shadow:    0 4px 16px rgba(29, 158, 117, 0.4);
+/* ════════════════════════════════════════════
+   TOAST DE AYUDA ACTIVA
+   Aparece en la parte superior al entrar en
+   modo frustrado. Se auto-cierra en 4 segundos.
+   ════════════════════════════════════════════ */
+
+#aura-toast {
+  position:        fixed;
+  top:             1.5rem;
+  left:            50%;
+  transform:       translateX(-50%) translateY(-120%);
+  background:      #1D9E75;
+  color:           #FFFFFF;
+  font-size:       14px;
+  font-weight:     500;
+  padding:         12px 20px;
+  border-radius:   999px;
+  display:         flex;
+  align-items:     center;
+  gap:             12px;
+  z-index:         9999;
+  box-shadow:      0 4px 16px rgba(29, 158, 117, 0.35);
+  opacity:         0;
   transition:
-    transform  ${TRANSITION_MS}ms ease,
-    box-shadow ${TRANSITION_MS}ms ease;
+    transform ${TRANSITION.mostrar}ms ease,
+    opacity   ${TRANSITION.mostrar}ms ease;
+  white-space: nowrap;
 }
 
-#aura-btn-ayuda:hover {
-  transform:  translateY(-2px);
-  box-shadow: 0 6px 20px rgba(29, 158, 117, 0.5);
+/* Clase que activa la entrada del toast */
+#aura-toast.aura-toast--visible {
+  opacity:   1;
+  transform: translateX(-50%) translateY(0);
 }
 
-#aura-btn-ayuda:active {
-  transform: scale(0.97);
+#aura-toast-cerrar {
+  background:    rgba(255,255,255,0.25);
+  border:        none;
+  color:         #FFFFFF;
+  font-size:     16px;
+  font-weight:   600;
+  width:         24px;
+  height:        24px;
+  border-radius: 50%;
+  cursor:        pointer;
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  padding:       0;
+  line-height:   1;
+  transition:    background ${TRANSITION.ocultar}ms ease;
+}
+
+#aura-toast-cerrar:hover {
+  background: rgba(255,255,255,0.4);
 }
 `;
 
 /**
- * @typedef {'normal' | 'support'} AdaptationState
+ * @typedef {'normal' | 'frustrado' | 'concentrado' | 'transitioning'} AdaptationState
  */

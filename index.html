@@ -31,8 +31,9 @@
 
     <!-- Controles de demo manual -->
     <div id="demo-controles">
-      <button id="btn-soporte" class="btn-soporte" >Simular frustración → Modo Soporte</button>
-      <button id="btn-normal" class="btn-normal">Volver a Normal</button>
+      <button id="btn-frustrado"   class="btn-soporte">Simular frustración → Modo Soporte</button>
+      <button id="btn-concentrado" class="btn-concentrado">Simular concentración → Modo Zen</button>
+      <button id="btn-normal"      class="btn-normal">Volver a Normal</button>
       <button id="btn-privacidad" style="border-color:#888780;color:#888780;">⏹ Detener sensores</button>
     </div>
 
@@ -67,7 +68,21 @@
     <div class="tel-row"><span class="tel-label">T. vuelo (flight)</span> <span class="tel-val" id="t-fl">—</span></div>
     <div class="tel-row"><span class="tel-label">Muestras</span>    <span class="tel-val" id="t-buf">0</span></div>
   </div>
-
+  
+  <!-- Panel A/B Testing -->
+  <div id="panel-ab">
+    <strong>A/B Testing — Tiempo de tarea</strong>
+    <div class="ab-row"><span class="ab-label">Grupo A (normal)</span>   <span class="ab-val" id="ab-grupo-a">—</span></div>
+    <div class="ab-row"><span class="ab-label">Grupo B (soporte)</span>  <span class="ab-val" id="ab-grupo-b">—</span></div>
+    <div class="ab-row"><span class="ab-label">Diferencia</span>         <span class="ab-val" id="ab-diferencia">—</span></div>
+    <div class="ab-row"><span class="ab-label">Tareas totales</span>     <span class="ab-val" id="ab-total">0</span></div>
+    <div class="ab-conclusion" id="ab-conclusion">Sin datos aún.</div>
+    <div id="panel-ab-controles">
+      <button id="btn-ab-iniciar">▶ Iniciar tarea</button>
+      <button id="btn-ab-completar">✓ Completar</button>
+      <button id="btn-ab-reiniciar">↺ Reiniciar</button>
+    </div>
+  </div>
   <!-- Barra de estado -->
   <div id="estado-bar">
     <div class="estado-dot"></div>
