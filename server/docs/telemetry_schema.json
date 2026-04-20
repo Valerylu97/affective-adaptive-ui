@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Aura Telemetry Schema",
+  "type": "object",
+  "required": ["session_id", "timestamp", "metrics", "classification"],
+  "properties": {
+    "session_id": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "mouse": { "type": "object" },
+        "keyboard": { "type": "object" }
+      },
+      "vision": {
+        "type": "object",
+            "properties": {
+                "dominant_emotion": { "type": "string" },
+                "confidence": { "type": "number" },
+                "is_present": { "type": "boolean" }
+            }
+        }
+    },
+    "classification": {
+      "type": "object",
+      "properties": {
+        "current_state": { "enum": ["normal", "support", "zen"] }
+      }
+    }
+  }
+}
