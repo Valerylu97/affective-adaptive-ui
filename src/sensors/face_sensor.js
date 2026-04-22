@@ -22,7 +22,8 @@ export async function startFaceDetection() {
         await video.play();
         return video;
     } catch (err) {
-        console.warn("IA: No se pudo acceder a la cámara.");
+        // Usamos 'err' para ver el motivo real en la consola (NotAllowedError, NotFoundError, etc.)
+        console.warn("IA: No se pudo acceder a la cámara. Detalle:", err.name);
         return null;
     }
 }

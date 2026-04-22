@@ -116,7 +116,10 @@ function iniciarBucleInferencia() {
         if (!ultimaMuestra) return;
 
         let cara = null;
-        try { cara = await getFaceMetrics(videoElement); } catch (err) { /* Modelos cargando */ }
+        try { cara = await getFaceMetrics(videoElement); }
+        catch (err) {
+            console.error("Error en engine.js:", err);
+        }
 
         const datosEntrada = {
             face: cara,
