@@ -83,7 +83,6 @@ window.addEventListener('message', (event) => {
 
     if (type === 'EXPERIMENT_EVENT') {
         if (action === 'task_completed') {
-            // Importante: completarTarea ahora debería recibir el promedio de jitter del sensor
             const fueRegistrado = ab.completarTarea(duration);
             if (fueRegistrado) {
                 actualizarPanelAB();
@@ -95,7 +94,7 @@ window.addEventListener('message', (event) => {
             }
         }
         if (action === 'trigger_frustration') {
-            adapter.applyAdaptation('frustrado');
+            activarSoporteConExplicacion('motor'); // Trigger manual desde el experimento
         }
     }
 });
@@ -136,21 +135,33 @@ function iniciarBucleInferencia() {
         const nuevoEstadoIA = prediccion.dominant;
         const estadoActualUI = adapter.estadoActual;
 
-        // LÓGICA DE DECISIÓN
+        // LÓGICA DE DECISIÓN (Integración con Panel de Transparencia)
         if (selectorModo === 'auto') {
-            // La IA tiene el control: Evitamos cambios bruscos durante tareas
             const esEstadoCritico = ab.tareaEnCurso && estadoActualUI === 'frustrado';
+            
             if (!esEstadoCritico && nuevoEstadoIA !== estadoActualUI) {
-                adapter.applyAdaptation(nuevoEstadoIA);
+                if (nuevoEstadoIA === 'frustrado') {
+                    // Decidimos la métrica disparadora para la explicación
+                    let razon = 'mixto';
+                    if (prediccion.frustrado > 0.6 && ultimaMuestra.jitter < 0.05) razon = 'facial';
+                    else if (ultimaMuestra.jitter > 0.07 || isRageClicking) razon = 'motor';
+                    
+                    activarSoporteConExplicacion(razon);
+                } else {
+                    adapter.applyAdaptation('normal');
+                }
             }
         } else {
-            // El Investigador tiene el control (Manual)
+            // Modo Manual (Investigador)
             if (estadoActualUI !== selectorModo) {
-                adapter.applyAdaptation(selectorModo);
+                if (selectorModo === 'frustrado') {
+                    activarSoporteConExplicacion('default');
+                } else {
+                    adapter.applyAdaptation('normal');
+                }
             }
         }
 
-        // Actualizar monitores con datos crudos y normalizados
         actualizarTelemetriaUI(ultimaMuestra, cara, prediccion, (selectorModo === 'auto' ? nuevoEstadoIA : selectorModo));
         
         isRageClicking = false;
@@ -159,27 +170,58 @@ function iniciarBucleInferencia() {
 }
 
 /**
- * 5. CONTROL DE PROTOCOLO (Investigación A/B)
+ * 5. FUNCIÓN DE TRANSPARENCIA Y EXPLICABILIDAD (Semana 4)
+ * Muestra al usuario qué estado se detectó y por qué.
+ */
+function activarSoporteConExplicacion(metricaDisparadora) {
+    const labelRazon = document.getElementById('razon-activacion');
+    let mensaje = "";
+
+    switch(metricaDisparadora) {
+        case 'facial':
+            mensaje = "Detectamos gestos de tensión o frustración en su expresión facial.";
+            break;
+        case 'motor':
+            mensaje = "Detectamos movimientos erráticos (Jitter alto) y lentitud en la interacción.";
+            break;
+        case 'mixto':
+            mensaje = "Se detectó una combinación de fatiga visual y alta carga motora.";
+            break;
+        default:
+            mensaje = "Intervención manual del investigador o protocolo de prueba.";
+    }
+
+    if (labelRazon) labelRazon.textContent = mensaje;
+    
+    // Aplicar cambio visual
+    adapter.applyAdaptation('frustrado');
+    console.info(`[Transparencia] Soporte activado por: ${metricaDisparadora}`);
+}
+
+/**
+ * 6. CONTROL DE PROTOCOLO (Investigación A/B)
  */
 document.addEventListener('change', (e) => {
     if (e.target.name === 'test-mode') {
         const modoManual = e.target.value;
         if (modoManual !== 'auto') {
-            adapter.applyAdaptation(modoManual);
-            console.log(`[Tesis] Protocolo Manual: Interfaz forzada a ${modoManual}`);
+            if (modoManual === 'frustrado') {
+                activarSoporteConExplicacion('default');
+            } else {
+                adapter.applyAdaptation('normal');
+            }
         }
     }
 });
 
 /**
- * 6. UTILIDADES DE TELEMETRÍA
+ * 7. UTILIDADES DE TELEMETRÍA
  */
 function actualizarTelemetriaUI(ultima, cara, prediccion, estadoMostrado) {
     const tVel = document.getElementById('t-vel');
     const tJit = document.getElementById('t-jit');
     if (!tVel || !tJit) return;
 
-    // Actualizamos con precisión de 4 decimales para validar el Jitter en la tesis
     tVel.textContent = ultima.velocidadMouse.toFixed(4);
     tJit.textContent = ultima.jitter.toFixed(4);
     
@@ -200,18 +242,11 @@ function actualizarTelemetriaUI(ultima, cara, prediccion, estadoMostrado) {
 }
 
 function actualizarPanelAB() {
-    const res = ab.obtenerResultados();
-    const fmtMs = ms => (ms > 0 ? `${ms.toFixed(0)} ms` : '—');
-
-    const domA = document.getElementById('ab-grupo-a');
-    const domB = document.getElementById('ab-grupo-b');
-    
-    if (domA) domA.textContent = `${fmtMs(res.grupoA.promedioMs)} (${res.grupoA.tareas} tareas)`;
-    if (domB) domB.textContent = `${fmtMs(res.grupoB.promedioMs)} (${res.grupoB.tareas} tareas)`;
+    ab.actualizarPanelResultados(); // Usamos el método unificado de la clase ABTesting
 }
 
 /**
- * 7. LISTENERS DE INTERACCIÓN Y PRIVACIDAD
+ * 8. LISTENERS DE INTERACCIÓN Y PRIVACIDAD
  */
 document.addEventListener('click', (e) => {
     const ahora = performance.now();
