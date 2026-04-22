@@ -3,94 +3,179 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Aura-UI — Telemetría en tiempo real</title>
+  <title>Aura-UI — Panel de Control Unificado</title>
   <link rel="stylesheet" href="./public/css/style.css">
 </head>
 <body class="aura--normal" data-aura-state="normal">
 
-  <!-- Header -->
+  <div id="consent-overlay">
+    <div class="consent-card">
+      <h2>📜 Consentimiento Informado</h2>
+      <p>Este sistema de <strong>Computación Afectiva</strong> analizará sus expresiones faciales y comportamiento motor para adaptar la interfaz.</p>
+      <ul style="font-size: 14px; color: #444; margin: 15px 0;">
+        <li>El procesamiento es local (privacidad garantizada).</li>
+        <li>Datos para fines académicos exclusivamente.</li>
+        <li>Puede retirarse apagando los sensores en cualquier momento.</li>
+      </ul>
+      <label style="cursor:pointer;">
+        <input type="checkbox" id="check-consent"> Acepto participar en el estudio.
+      </label>
+      <br>
+      <button id="btn-entrar" class="btn-consent" disabled>Entrar al Panel</button>
+    </div>
+  </div>
+
   <header>
-    <h1>Panel Aura-UI</h1>
-    <span class="aura-notif" data-aura-role="notificacion">3 notificaciones nuevas</span>
+    <h1>Aura-UI <small style="font-size: 12px; opacity: 0.6;">| Investigación de Maestría</small></h1>
+    <div id="estado-bar">
+      <div class="estado-dot"></div>
+      <span id="estado-label">Sistema listo</span>
+    </div>
   </header>
 
-  <!-- Nav lateral -->
-  <nav data-aura-role="nav">
-    <h2>Navegación</h2>
-    <ul>
-      <li><a href="#" class="aura-menu-item aura-menu-item--principal">Dashboard</a></li>
-      <li><a href="#" class="aura-menu-item aura-menu-item--principal">Mi trabajo</a></li>
-      <li><a href="#" class="aura-menu-item">Reportes</a></li>
-      <li><a href="#" class="aura-menu-item">Configuración</a></li>
-      <li><a href="#" class="aura-menu-item">Ayuda</a></li>
-    </ul>
-  </nav>
+  <div class="main-layout">
+    
+    <nav class="sidebar-admin" data-aura-role="nav">
+      <section class="aura-card test-config-panel">
+        <h3>Protocolo de Prueba</h3>
+        <label class="mode-option">
+          <input type="radio" name="test-mode" value="auto" id="radio-auto" checked> 🤖 IA Automática
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="test-mode" value="normal"> <span>🟢 Grupo A (Normal)</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="test-mode" value="frustrado"> <span>🔴 Grupo B (Soporte)</span>
+        </label>
+        
+        <button onclick="activarModoAuto()" class="btn-volver-auto">🔄 Volver a IA</button>
+      </section>
 
-  <!-- Main -->
-  <main>
+      <section class="aura-card">
+        <h3>Tareas Experimentales</h3>
+        <div onclick="openExperiment('./public/experiments/exp_frustracion.html', 'Tarea 1: Registro Estándar')" class="nav-experiment">🧪 Tarea 1: Registro</div>
+        <div onclick="openExperiment('./public/experiments/exp_concentracion.html', 'Tarea 2: Consulta de Datos')" class="nav-experiment">🎯 Tarea 2: Consulta</div>
+        
+        <hr style="margin: 15px 0; border: 0; border-top: 1px solid #eee;">
+        <button id="btn-exportar" style="width:100%; padding:10px; background:#34495e; color:white; border:none; border-radius:6px; cursor:pointer;">📥 Exportar Dataset</button>
+      </section>
+    </nav>
 
-    <!-- Controles de demo manual -->
-    <div id="demo-controles">
-      <button id="btn-frustrado"   class="btn-soporte">Simular frustración → Modo Soporte</button>
-      <button id="btn-concentrado" class="btn-concentrado">Simular concentración → Modo Zen</button>
-      <button id="btn-normal"      class="btn-normal">Volver a Normal</button>
-      <button id="btn-privacidad" style="border-color:#888780;color:#888780;">⏹ Detener sensores</button>
-    </div>
+    <main class="workspace">
+      <div id="experiment-container" style="display: none; margin-bottom: 20px;">
+        <div style="background: #34495e; color: white; padding: 12px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
+          <span id="task-title" style="font-weight: bold; font-size: 14px;">Tarea en curso</span>
+          <button onclick="closeExperiment()" style="background: #e74c3c; color: white; border: none; cursor: pointer; border-radius: 4px; padding: 5px 10px; font-size: 11px;">Finalizar Tarea</button>
+        </div>
+        <iframe id="experiment-frame" src=""></iframe>
+      </div>
 
-    <!-- Cards -->
-    <div class="card-grid">
-      <div class="aura-card"><h3>Tareas hoy</h3><div class="val">12</div></div>
-      <div class="aura-card"><h3>Completadas</h3><div class="val">7</div></div>
-      <div class="aura-card"><h3>En progreso</h3><div class="val">3</div></div>
-    </div>
+      <div id="main-dashboard-content">
+        <div class="card-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
+          <div class="aura-card"><h3>Tareas hoy</h3><div class="val">12</div></div>
+          <div class="aura-card"><h3>Completadas</h3><div class="val">7</div></div>
+          <div class="aura-card"><h3>En progreso</h3><div class="val">3</div></div>
+        </div>
 
-    <!-- Elemento secundario -->
-    <div class="aura-secondary" data-aura-role="secondary">
-      Actividad reciente — este bloque se oculta en modo soporte para reducir carga cognitiva.
-    </div>
+        <div id="ayuda-adaptativa" class="solo-soporte">
+          <div style="background: #fff5eb; border: 2px dashed #D85A30; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+              <h3 style="color: #D85A30;">🛠️ Asistente de Interfaz Activo</h3>
+              <p style="font-size: 13px; margin-bottom: 10px;">El sistema ha detectado una carga de trabajo elevada. Acceda directamente aquí:</p>
+              <div style="display: flex; gap: 10px;">
+                  <button onclick="openExperiment('./public/experiments/exp_frustracion.html', 'Tarea 1: Soporte')" class="nav-experiment" style="background:#D85A30; color:white; border:none;">Tarea 1: Modo Guiado</button>
+                  <button onclick="openExperiment('./public/experiments/exp_concentracion.html', 'Tarea 2: Soporte')" class="nav-experiment" style="background:#D85A30; color:white; border:none;">Tarea 2: Modo Guiado</button>
+              </div>
+              <button onclick="activarModoAuto()" style="margin-top:10px; background:none; border:none; color:#7f8c8d; cursor:pointer; text-decoration:underline; font-size:11px;">Entendido, volver al dashboard normal</button>
+          </div>
+        </div>
 
-    <!-- Área de escritura -->
-    <div class="aura-section">
-      <label for="area-trabajo" style="font-size:13px;color:#888780;display:block;margin-bottom:.4rem;">
-        Escribe aquí — los sensores están activos
-      </label>
-      <textarea id="area-trabajo" placeholder="Empieza a escribir o mueve el mouse..."></textarea>
-    </div>
+        <div class="aura-section">
+          <label id="log-reason" style="font-size:13px; color:#34495e; font-weight:bold; display:block; margin-bottom:.4rem;">Estado IA: Monitorizando...</label>
+          <textarea id="area-trabajo" placeholder="Zona de escritura libre para observación de métricas motoras..." style="width: 100%; height: 200px; padding: 15px; border-radius: 8px; border: 1px solid #ddd;"></textarea>
+        </div>
+      </div>
+    </main>
 
-  </main>
+    <aside class="telemetry-panel" data-aura-role="sensors">
+      <section class="aura-card">
+        <h3>Visión Afectiva</h3>
+        <video id="video" autoplay muted></video>
+        <div id="t-face" style="margin-top: 8px; font-size: 12px; font-family: monospace;">Cargando modelos...</div>
+      </section>
 
-  <!-- Panel de telemetría en tiempo real -->
-  <div id="telemetria">
-    <strong>Telemetría en tiempo real</strong>
-    <div class="tel-row"><span class="tel-label">Vel. mouse</span> <span class="tel-val" id="t-vel">—</span></div>
-    <div class="tel-row"><span class="tel-label">Variación (jitter)</span>      <span class="tel-val" id="t-jit">—</span></div>
-    <div class="tel-row"><span class="tel-label">T. pulsación (dwell)</span>  <span class="tel-val" id="t-dw">—</span></div>
-    <div class="tel-row"><span class="tel-label">T. vuelo (flight)</span> <span class="tel-val" id="t-fl">—</span></div>
-    <div class="tel-row"><span class="tel-label">Muestras</span>    <span class="tel-val" id="t-buf">0</span></div>
+      <section class="aura-card">
+        <h3>Métricas Motoras</h3>
+        <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-family: monospace;">
+          <div class="tel-row"><span>Velocidad:</span> <span id="t-vel">0.0000</span></div>
+          <div class="tel-row"><span>Jitter:</span> <span id="t-jit">0.0000</span></div>
+          <div class="tel-row"><span>Dwell:</span> <span id="t-dw">0.0000</span></div>
+          <hr style="border:0; border-top:1px solid #eee;">
+          <div class="tel-row"><span>Buffer:</span> <span id="t-buf">0</span></div>
+        </div>
+      </section>
+
+      <section class="aura-card">
+        <h3>Resultados A/B</h3>
+        <div style="font-size: 12px;">
+          <div>A (Normal): <strong id="ab-grupo-a">—</strong></div>
+          <div>B (Soporte): <strong id="ab-grupo-b">—</strong></div>
+          <div id="ab-conclusion" style="margin-top:10px; color:#3498db; font-style:italic;">Esperando datos...</div>
+        </div>
+      </section>
+
+      <button id="btn-privacidad" style="margin-top:auto; padding:10px; border-radius:6px; border:1px solid #ccc; cursor:pointer;">⏹ Sensores</button>
+    </aside>
   </div>
-  
-  <!-- Panel A/B Testing -->
-  <div id="panel-ab">
-    <strong>A/B Testing — Tiempo de tarea</strong>
-    <div class="ab-row"><span class="ab-label">Grupo A (normal)</span>   <span class="ab-val" id="ab-grupo-a">—</span></div>
-    <div class="ab-row"><span class="ab-label">Grupo B (soporte)</span>  <span class="ab-val" id="ab-grupo-b">—</span></div>
-    <div class="ab-row"><span class="ab-label">Diferencia</span>         <span class="ab-val" id="ab-diferencia">—</span></div>
-    <div class="ab-row"><span class="ab-label">Tareas totales</span>     <span class="ab-val" id="ab-total">0</span></div>
-    <div class="ab-conclusion" id="ab-conclusion">Sin datos aún.</div>
-    <div id="panel-ab-controles">
-      <button id="btn-ab-iniciar">▶ Iniciar tarea</button>
-      <button id="btn-ab-completar">✓ Completar</button>
-      <button id="btn-ab-reiniciar">↺ Reiniciar</button>
-    </div>
-  </div>
-  <!-- Barra de estado -->
-  <div id="estado-bar">
-    <div class="estado-dot"></div>
-    <span id="estado-label">normal</span>
-  </div>
 
-  <!-- Sensores + UIAdapter inline -->
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <script type="module" src="./src/logic/engine.js"></script>
 
+  <script>
+    const btnEntrar = document.getElementById('btn-entrar');
+    const overlay = document.getElementById('consent-overlay');
+    const check = document.getElementById('check-consent');
+    const frame = document.getElementById('experiment-frame');
+    const expContainer = document.getElementById('experiment-container');
+    const mainContent = document.getElementById('main-dashboard-content');
+
+    window.onload = () => overlay.style.display = 'flex';
+    
+    check.addEventListener('change', () => btnEntrar.disabled = !check.checked);
+    
+    btnEntrar.addEventListener('click', () => {
+      overlay.style.display = 'none';
+      window.dispatchEvent(new CustomEvent('init-aura-sensors'));
+    });
+
+    function openExperiment(url, title) {
+      document.getElementById('task-title').textContent = title;
+      frame.src = url;
+      expContainer.style.display = 'block';
+      mainContent.style.display = 'none';
+      window.dispatchEvent(new CustomEvent('aura-task-start'));
+    }
+
+    function closeExperiment() {
+      window.postMessage({ type: 'EXPERIMENT_EVENT', action: 'task_completed' }, '*');
+      frame.src = "";
+      expContainer.style.display = 'none';
+      mainContent.style.display = 'block';
+    }
+
+    // Función para retornar el control al sistema automático
+    function activarModoAuto() {
+      const radioAuto = document.getElementById('radio-auto');
+      if (radioAuto) {
+          radioAuto.checked = true;
+          // Notificar al engine.js del cambio
+          radioAuto.dispatchEvent(new Event('change', { bubbles: true }));
+          
+          // Limpieza manual de clases visuales por seguridad
+          document.body.classList.remove('aura--frustrado');
+          document.body.classList.add('aura--auto');
+          console.log("[Protocolo] Retornando al control por IA Automática.");
+      }
+    }
+  </script>
 </body>
 </html>

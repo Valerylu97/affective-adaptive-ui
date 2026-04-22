@@ -1,217 +1,185 @@
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* ── BASE & ESTRUCTURA FLEX ── */
+*, *::before, *::after { 
+    box-sizing: border-box; 
+    margin: 0; 
+    padding: 0; 
+}
 
 :root {
-    --aura-font-size-base:    16px;
-    --aura-bg:                #F7F6F2;
-    --aura-surface:           #FFFFFF;
-    --aura-text:              #2C2C2A;
-    --aura-text-secondary:    #888780;
-    --aura-border:            #E4E2DA;
-    --aura-nav-display:       block;
-    --aura-secondary-display: block;
-    --aura-notif-display:     block;
-    --aura-card-radius:       8px;
-    --aura-spacing:           1rem;
+    --aura-bg: #f0f2f5;
+    --aura-surface: #ffffff;
+    --aura-border: #e1e4e8;
+    --aura-primary: #3498db;
+    --color-frustrado: #D85A30;
 }
 
 body {
-    font-family:  system-ui, sans-serif;
-    font-size:    var(--aura-font-size-base);
-    background:   var(--aura-bg);
-    color:        var(--aura-text);
-    min-height:   100vh;
-    display:      grid;
-    grid-template-columns: 220px 1fr;
-    grid-template-rows:    auto 1fr;
-    grid-template-areas:
-    "header header"
-    "nav    main";
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--aura-bg);
+    overflow: hidden; /* Evita scroll doble */
+    margin: 0;
 }
 
-/* ── Header ── */
+/* Header Fijo */
 header {
-    grid-area:   header;
-    background:  var(--aura-surface);
+    height: 60px;
+    background: var(--aura-surface);
     border-bottom: 1px solid var(--aura-border);
-    padding:     12px 24px;
-    display:     flex;
+    display: flex;
     align-items: center;
+    padding: 0 20px;
     justify-content: space-between;
 }
 
-header h1 { font-size: 15px; font-weight: 600; }
-
-/* Notificaciones — se ocultan en modo soporte */
-.aura-notif {
-    display:     var(--aura-notif-display, block);
-    background:  #EAF3DE;
-    color:       #3B6D11;
-    font-size:   13px;
-    padding:     6px 14px;
-    border-radius: 999px;
+/* LAYOUT PRINCIPAL */
+.main-layout {
+    display: flex;
+    height: calc(100vh - 60px); 
+    gap: 15px;
+    padding: 15px;
+    background: var(--aura-bg);
 }
 
-/* ── Nav lateral ── */
-nav[data-aura-role="nav"] {
-    grid-area:   nav;
-    display:     var(--aura-nav-display, block);
-    background:  var(--aura-surface);
-    border-right: 1px solid var(--aura-border);
-    padding:     var(--aura-spacing);
+/* COLUMNAS */
+.sidebar-admin { 
+    width: 250px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 15px; 
+    overflow-y: auto;
+    transition: all 0.3s ease;
 }
 
-nav h2 {
-    font-size:      12px;
-    color:          var(--aura-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: .08em;
-    margin-bottom:  .75rem;
+.workspace { 
+    flex-grow: 1; 
+    background: white; 
+    border-radius: 12px; 
+    padding: 20px; 
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    overflow-y: auto;
+    transition: all 0.3s ease;
 }
 
-nav ul { list-style: none; display: flex; flex-direction: column; gap: 4px; }
-nav a  {
-    display:       block;
-    padding:       6px 10px;
-    border-radius: 6px;
-    color:         var(--aura-text);
-    text-decoration: none;
-    font-size:     14px;
+.telemetry-panel { 
+    width: 280px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 10px; 
+    overflow-y: auto;
 }
 
-nav a:hover { background: #F1EFE8; }
-.aura-menu-item--principal { font-weight: 500; }
-
-/* Oculta items secundarios en modo soporte */
-body.aura--support .aura-menu-item:not(.aura-menu-item--principal) {
-    display: none;
-}
-
-/* ── Main ── */
-main {
-    grid-area: main;
-    padding:   calc(var(--aura-spacing) * 1.5);
-}
-
-/* ── Elementos secundarios ── */
-.aura-secondary {
-    display:       var(--aura-secondary-display, block);
-    background:    var(--aura-surface);
-    border:        1px solid var(--aura-border);
-    border-radius: var(--aura-card-radius);
-    padding:       var(--aura-spacing);
-    margin-bottom: 1rem;
-    font-size:     13px;
-    color:         var(--aura-text-secondary);
-}
-
-/* ── Cards ── */
-.card-grid {
-    display:               grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap:                   1rem;
-    margin-bottom:         1.5rem;
-}
-
+/* ── COMPONENTES GENERALES ── */
 .aura-card {
-    background:    var(--aura-surface);
-    border:        1px solid var(--aura-border);
-    border-radius: var(--aura-card-radius);
-    padding:       var(--aura-spacing);
+    background: var(--aura-surface);
+    border: 1px solid var(--aura-border);
+    border-radius: 8px;
+    padding: 12px;
 }
 
-.aura-card h3   { font-size: 12px; color: var(--aura-text-secondary); margin-bottom: .4rem; }
-.aura-card .val { font-size: 1.5rem; font-weight: 600; }
-
-/* ── Área de escritura ── */
-.aura-section { padding: var(--aura-spacing); }
-
-textarea {
-    width:       100%;
-    min-height:  120px;
-    border:      1px solid var(--aura-border);
+.nav-experiment {
+    background: #fff;
+    border: 1px solid var(--aura-border);
+    padding: 10px;
+    margin-bottom: 8px;
     border-radius: 6px;
-    padding:     10px 12px;
-    font-size:   var(--aura-font-size-base);
-    font-family: inherit;
-    resize:      vertical;
-    background:  var(--aura-surface);
-    color:       var(--aura-text);
-    outline:     none;
-}
-textarea:focus { border-color: #1D9E75; }
-
-/* ── Panel de telemetría ── */
-#telemetria {
-    position:      fixed;
-    top:           1rem;
-    right:         1rem;
-    background:    var(--aura-surface);
-    border:        1px solid var(--aura-border);
-    border-radius: 10px;
-    padding:       14px 18px;
-    font-size:     12px;
-    font-family:   monospace;
-    min-width:     260px;
-    line-height:   1.9;
-    z-index:       100;
+    cursor: pointer;
+    font-size: 13px;
+    transition: 0.2s;
 }
 
-#telemetria strong {
-    display:       block;
-    font-size:     11px;
-    color:         var(--aura-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    margin-bottom: 6px;
+.nav-experiment:hover {
+    border-color: var(--aura-primary);
+    background: #f0f7ff;
 }
 
-.tel-row { display: flex; justify-content: space-between; gap: 12px; }
-.tel-label { color: var(--aura-text-secondary); }
-.tel-val   { font-weight: 600; color: var(--aura-text); }
+/* ── LÓGICA DE VISIBILIDAD DE SOPORTE ── */
 
-/* ── Barra de estado ── */
-#estado-bar {
-    position:      fixed;
-    bottom:        1.5rem;
-    left:          50%;
-    transform:     translateX(-50%);
-    background:    var(--aura-surface);
-    border:        1px solid var(--aura-border);
-    border-radius: 999px;
-    padding:       8px 20px;
-    font-size:     13px;
-    display:       flex;
-    align-items:   center;
-    gap:           8px;
+/* Los botones de soporte están ocultos por defecto */
+.solo-soporte {
+    display: none !important;
+    opacity: 0;
+    transition: opacity 0.4s ease;
 }
 
-.estado-dot {
-    width:         8px;
-    height:        8px;
-    border-radius: 50%;
-    background:    #639922;
-    transition:    background 400ms ease;
+/* Solo se muestran cuando el body tiene la clase frustrado */
+body.aura--frustrado .solo-soporte {
+    display: block !important;
+    opacity: 1;
 }
 
-body.aura--support .estado-dot { background: #D85A30; }
+/* ── OCULTACIÓN DE LA BARRA LATERAL (Protocolo AfectIHM) ── */
 
-/* ── Controles de demo ── */
-#demo-controles {
-    display:   flex;
-    gap:       8px;
-    margin-bottom: 1rem;
+/* Cuando se activa el modo soporte, ocultamos la columna de administración 
+   para eliminar distractores y que el usuario se enfoque en la ayuda */
+body.aura--frustrado .sidebar-admin {
+    display: none !important;
 }
 
-#demo-controles button {
-    padding:       8px 16px;
-    border:        1px solid var(--aura-border);
+/* ── MODIFICACIONES VISUALES EN MODO SOPORTE ── */
+body.aura--frustrado .workspace {
+    border: 2px solid var(--color-frustrado);
+    background-color: #fff9f8;
+}
+
+/* ── BOTÓN DE VOLVER AL MODO AUTO ── */
+.btn-volver-auto {
+    display: none; /* Oculto por defecto */
+    margin-top: 15px;
+    padding: 8px 12px;
+    background: var(--aura-primary);
+    color: white;
+    border: none;
     border-radius: 6px;
-    background:    var(--aura-surface);
-    color:         var(--aura-text);
-    font-size:     13px;
-    cursor:        pointer;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    transition: background 0.2s;
 }
 
-#demo-controles button:hover { background: #F1EFE8; }
-#demo-controles .btn-soporte { border-color: #D85A30; color: #D85A30; }
-#demo-controles .btn-normal  { border-color: #1D9E75; color: #1D9E75; }
+.btn-volver-auto:hover {
+    background: #2980b9;
+}
+
+/* Solo mostramos el botón si NO estamos en modo auto */
+body:not(.aura--auto) .btn-volver-auto {
+    display: inline-block;
+}
+
+/* ── ELEMENTOS DE TELEMETRÍA Y MEDIA ── */
+#video {
+    width: 100%;
+    border-radius: 6px;
+    background: #000;
+}
+
+#experiment-frame { 
+    width: 100%; 
+    height: 650px; 
+    border: none; 
+    background: white; 
+    border-radius: 8px;
+}
+
+/* ── CONSENTIMIENTO ÉTICO ── */
+#consent-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.9); z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+}
+
+.consent-card {
+    background: white; padding: 30px; max-width: 500px; border-radius: 12px;
+    line-height: 1.5; color: #333;
+}
+
+.btn-consent { 
+    background: var(--aura-primary); color: white; border: none; padding: 10px 20px; 
+    border-radius: 5px; cursor: pointer; margin-top: 15px; font-weight: bold;
+}
+
+.btn-consent:disabled { background: #bdc3c7; }
+
+/* ── SELECTOR DE PROTOCOLO ── */
+.test-config-panel h3 { font-size: 11px; text-transform: uppercase; color: var(--aura-primary); margin-bottom: 10px; }
+.mode-option { display: block; font-size: 13px; margin-bottom: 8px; cursor: pointer; padding: 8px; border-radius: 6px; border: 1px solid #eee; }
+.mode-option:hover { background: #f0f7ff; }
