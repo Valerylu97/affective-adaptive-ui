@@ -1,129 +1,284 @@
+/**
+ * @module Engine
+ * @description Orquestador central del sistema Aura-UI.
+ * Gestiona el ciclo de vida de los sensores, el motor de inferencia afectiva
+ * y la lógica de experimentación para la tesis UPEC.
+ */
+
 import { UIAdapter } from '../ui/UIAdapter.js';
 import { bufferGlobal, startSensors, stopSensors, isSensing } from '../sensors/sensors.js';
+import { ABTesting } from '../ab-testing.js';
+import { getFaceMetrics, startFaceDetection, stopFaceDetection } from '../sensors/face_sensor.js';
+import { AffectiveClassifier } from './classifier.js';
 
-// Variables para detección de Rage Clicking (Frustración)
+/**
+ * 1. INICIALIZACIÓN DE COMPONENTES CORE
+ */
+const adapter = new UIAdapter({
+    rootSelector: 'body',
+    onStateChange: ({ to }) => {
+        console.info(`[Aura] Cambio de interfaz a: ${to}`);
+        const label = document.getElementById('estado-label');
+        if (label) label.textContent = to;
+    },
+});
+
+const ab = new ABTesting(adapter);
+const classifier = new AffectiveClassifier();
+
+// Variables de control de estado
 let clickCount = 0;
+let isRageClicking = false;
 let lastClickTime = 0;
 let lastElement = null;
-let isRageClicking = false;
+let videoElement = null;
+let inferenceInterval = null;
 
-// Evento que captura la frustración cuando el usuario hace muchos clics seguidos
+/**
+ * 2. GESTIÓN DE SENSORES Y PRIVACIDAD
+ */
+async function inicializarSistemaAfectivo() {
+    if (isSensing()) return; 
+
+    console.warn("[Aura] Iniciando protocolos de captura afectiva...");
+    
+    try {
+        startSensors();
+        videoElement = await startFaceDetection();
+        
+        if (videoElement) {
+            iniciarBucleInferencia();
+            const btnPriv = document.getElementById('btn-privacidad');
+            if (btnPriv) btnPriv.textContent = '⏹ Detener sensores';
+            
+            // Sincronización inicial con el modo seleccionado en el HTML
+            const modoInicial = document.querySelector('input[name="test-mode"]:checked')?.value;
+            if (modoInicial && modoInicial !== 'auto') {
+                adapter.applyAdaptation(modoInicial);
+            }
+        }
+    } catch (err) {
+        console.error("[Aura] Error crítico al acceder a los sensores:", err);
+    }
+}
+
+/**
+ * 3. BUS DE EVENTOS (Comunicación Inter-Módulos)
+ */
+window.addEventListener('init-aura-sensors', () => {
+    inicializarSistemaAfectivo();
+});
+
+window.addEventListener('aura-task-start', () => {
+    ab.iniciarTarea(); 
+    const estadoLabel = document.getElementById('estado-label');
+    if (estadoLabel) {
+        estadoLabel.textContent = "GRABANDO MÉTRICAS...";
+        estadoLabel.style.color = "#e67e22"; 
+    }
+});
+
+window.addEventListener('message', (event) => {
+    const { type, action, duration } = event.data;
+
+    if (type === 'EXPERIMENT_EVENT') {
+        if (action === 'task_completed') {
+            const fueRegistrado = ab.completarTarea(duration);
+            if (fueRegistrado) {
+                actualizarPanelAB();
+                const estadoLabel = document.getElementById('estado-label');
+                if (estadoLabel) {
+                    estadoLabel.textContent = adapter.estadoActual;
+                    estadoLabel.style.color = "";
+                }
+            }
+        }
+        if (action === 'trigger_frustration') {
+            activarSoporteConExplicacion('motor'); // Trigger manual desde el experimento
+        }
+    }
+});
+
+/**
+ * 4. MOTOR DE INFERENCIA AFECTIVA (Control Híbrido)
+ */
+function iniciarBucleInferencia() {
+    if (inferenceInterval) clearInterval(inferenceInterval);
+
+    inferenceInterval = setInterval(async () => {
+        if (!isSensing() || !videoElement) return;
+
+        // Prioridad: ¿Estamos en modo manual o automático?
+        const selectorModo = document.querySelector('input[name="test-mode"]:checked')?.value || 'auto';
+
+        const ultimaMuestra = bufferGlobal.at(-1);
+        if (!ultimaMuestra) return;
+
+        let cara = null;
+        try { cara = await getFaceMetrics(videoElement); }
+        catch (err) {
+            console.error("Error en engine.js:", err);
+        }
+
+        const datosEntrada = {
+            face: cara,
+            mouse: { 
+                jitter: ultimaMuestra.jitter, 
+                isRageClicking: isRageClicking 
+            },
+            keyboard: { 
+                typingSpeed: ultimaMuestra.flightTime 
+            }
+        };
+
+        const prediccion = classifier.classify(datosEntrada);
+        const nuevoEstadoIA = prediccion.dominant;
+        const estadoActualUI = adapter.estadoActual;
+
+        // LÓGICA DE DECISIÓN (Integración con Panel de Transparencia)
+        if (selectorModo === 'auto') {
+            const esEstadoCritico = ab.tareaEnCurso && estadoActualUI === 'frustrado';
+            
+            if (!esEstadoCritico && nuevoEstadoIA !== estadoActualUI) {
+                if (nuevoEstadoIA === 'frustrado') {
+                    // Decidimos la métrica disparadora para la explicación
+                    let razon = 'mixto';
+                    if (prediccion.frustrado > 0.6 && ultimaMuestra.jitter < 0.05) razon = 'facial';
+                    else if (ultimaMuestra.jitter > 0.07 || isRageClicking) razon = 'motor';
+                    
+                    activarSoporteConExplicacion(razon);
+                } else {
+                    adapter.applyAdaptation('normal');
+                }
+            }
+        } else {
+            // Modo Manual (Investigador)
+            if (estadoActualUI !== selectorModo) {
+                if (selectorModo === 'frustrado') {
+                    activarSoporteConExplicacion('default');
+                } else {
+                    adapter.applyAdaptation('normal');
+                }
+            }
+        }
+
+        actualizarTelemetriaUI(ultimaMuestra, cara, prediccion, (selectorModo === 'auto' ? nuevoEstadoIA : selectorModo));
+        
+        isRageClicking = false;
+        clickCount = 0;
+    }, 500);
+}
+
+/**
+ * 5. FUNCIÓN DE TRANSPARENCIA Y EXPLICABILIDAD (Semana 4)
+ * Muestra al usuario qué estado se detectó y por qué.
+ */
+function activarSoporteConExplicacion(metricaDisparadora) {
+    const labelRazon = document.getElementById('razon-activacion');
+    let mensaje; // Definimos la variable sin asignar un valor inicial inútil
+
+    switch(metricaDisparadora) {
+        case 'facial':
+            mensaje = "Detectamos gestos de tensión o frustración en su expresión facial.";
+            break;
+        case 'motor':
+            mensaje = "Detectamos movimientos erráticos (Jitter alto) y lentitud en la interacción.";
+            break;
+        case 'mixto':
+            mensaje = "Se detectó una combinación de fatiga visual y alta carga motora.";
+            break;
+        default:
+            mensaje = "Intervención manual del investigador o protocolo de prueba.";
+    }
+
+    if (labelRazon) {
+        labelRazon.textContent = mensaje;
+    }
+    
+    // Aplicar cambio visual mediante el adaptador de UI
+    adapter.applyAdaptation('frustrado');
+    console.info(`[Transparencia] Soporte activado por: ${metricaDisparadora}`);
+}
+
+/**
+ * 6. CONTROL DE PROTOCOLO (Investigación A/B)
+ */
+document.addEventListener('change', (e) => {
+    if (e.target.name === 'test-mode') {
+        const modoManual = e.target.value;
+        if (modoManual !== 'auto') {
+            if (modoManual === 'frustrado') {
+                activarSoporteConExplicacion('default');
+            } else {
+                adapter.applyAdaptation('normal');
+            }
+        }
+    }
+});
+
+/**
+ * 7. UTILIDADES DE TELEMETRÍA
+ */
+function actualizarTelemetriaUI(ultima, cara, prediccion, estadoMostrado) {
+    const tVel = document.getElementById('t-vel');
+    const tJit = document.getElementById('t-jit');
+    if (!tVel || !tJit) return;
+
+    tVel.textContent = ultima.velocidadMouse.toFixed(4);
+    tJit.textContent = ultima.jitter.toFixed(4);
+    
+    if (document.getElementById('t-dw')) document.getElementById('t-dw').textContent = ultima.dwellTime.toFixed(4);
+    if (document.getElementById('t-buf')) document.getElementById('t-buf').textContent = bufferGlobal.length;
+
+    const panelFace = document.getElementById('t-face');
+    if (panelFace && cara) {
+        panelFace.innerHTML = `
+            <div style="font-weight: bold; color: ${estadoMostrado === 'frustrado' ? '#D85A30' : '#3498db'}">
+                SISTEMA: ${estadoMostrado.toUpperCase()}
+            </div>
+            <div style="font-size: 0.85em; margin-top: 4px; color: #666;">
+                IA detecta -> F: ${Math.round(prediccion.frustrado * 100)}% | C: ${Math.round(prediccion.concentrado * 100)}%
+            </div>
+        `;
+    }
+}
+
+function actualizarPanelAB() {
+    ab.actualizarPanelResultados(); // Usamos el método unificado de la clase ABTesting
+}
+
+/**
+ * 8. LISTENERS DE INTERACCIÓN Y PRIVACIDAD
+ */
 document.addEventListener('click', (e) => {
     const ahora = performance.now();
-    // Si hace clic en el mismo elemento en menos de 500ms
     if (e.target === lastElement && (ahora - lastClickTime) < 500) {
         clickCount++;
     } else {
         clickCount = 1;
         isRageClicking = false;
     }
-      
     lastClickTime = ahora;
     lastElement = e.target;
 
     if (clickCount >= 3) {
         isRageClicking = true;
-        console.warn("⚠️ Rage Clicking detectado");
+        console.warn("⚠️ Rage Clicking detectado!");
     }
 });
 
-// Función para enviar los datos al servidor
-async function enviarAlServidor(muestra) {
-    try {
-      await fetch('http://localhost:3000/api/telemetry', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: "UPEC-SESSION-" + Date.now(),
-          user_tag: "Valeria-Testing", // Puedes cambiar esto por el nombre del tester
-          metrics: {
-            mouse: { 
-              velocity_norm: muestra.velocidadMouse, 
-              jitter_norm: muestra.jitter 
-            },
-            keyboard: { 
-              dwell_time_norm: muestra.dwellTime, 
-              flight_time_norm: muestra.flightTime 
-            }
-          },
-          classification: {
-            // Captura el estado actual que tiene el dataset del body
-            current_state: document.body.dataset.auraState || 'normal',
-            is_manual_override: true 
-          }
-        })
-      });
-    } catch (err) {
-      console.error("Error de red:", err.message);
-    }
-}
-
-// Inicia la captura al cargar la página
-startSensors();
-
-const adapter = new UIAdapter({
-    rootSelector: 'body',
-    onStateChange: ({ from, to }) => {
-      console.info(`[Aura] Estado: ${from} → ${to}`);
-      document.getElementById('estado-label').textContent = to;
-    },
+document.getElementById('btn-exportar')?.addEventListener('click', () => {
+    ab.exportarDataset();
 });
 
-// Botones de demo — addEventListener en lugar de onclick
-document.getElementById('btn-soporte').addEventListener('click', () => {
-    adapter.applyAdaptation('support');
-});
-
-document.getElementById('btn-normal').addEventListener('click', () => {
-    adapter.applyAdaptation('normal');
-});
-
-// Control de privacidad — derecho a la desconexión
-document.getElementById('btn-privacidad').addEventListener('click', () => {
-    const btn = document.getElementById('btn-privacidad');
+document.getElementById('btn-privacidad')?.addEventListener('click', async () => {
     if (isSensing()) {
-      stopSensors();
-      btn.textContent = '▶ Activar sensores';
+        stopSensors(); 
+        stopFaceDetection(videoElement); 
+        if (inferenceInterval) clearInterval(inferenceInterval);
+        document.getElementById('btn-privacidad').textContent = '▶ Activar sensores';
+        adapter.applyAdaptation('normal');
     } else {
-      startSensors();
-      btn.textContent = '⏹ Detener sensores';
+        inicializarSistemaAfectivo();
     }
 });
-
-// Actualiza el panel de telemetría con los datos del buffer
-setInterval(() => {
-    const ultima = bufferGlobal.at(-1);
-    if (!ultima) return;
-
-    // --- LÓGICA DE CLASIFICACIÓN ---
-    let estadoActual = "normal";
-
-    // Regla de Frustración: Velocidad alta, Jitter alto o Rage Clicking
-    if (isRageClicking || ultima.velocidadMouse > 2.0 || ultima.jitter > 0.7) {
-        estadoActual = "frustrated";
-    }
-
-    // Regla de Confusión: Tiempos de pulsación largos (Dwell Time)
-    else if (ultima.dwellTime > 350) {
-        estadoActual = "confused";
-    }
-      
-    // Cumplimos con el requisito del Issue: Imprimir en consola
-    console.log(`%c [STATUS] User is ${estadoActual.toUpperCase()} `, 'background: #222; color: #bada55; font-weight: bold;');
-
-    // Guardamos el estado en el dataset para que el envío lo reconozca
-    document.body.dataset.auraState = estadoActual;
-
-    // 1. Actualiza la pantalla
-    document.getElementById('t-vel').textContent = ultima.velocidadMouse.toFixed(3);
-    document.getElementById('t-jit').textContent = ultima.jitter.toFixed(3);
-    document.getElementById('t-dw').textContent   = ultima.dwellTime.toFixed(3);
-    document.getElementById('t-fl').textContent   = ultima.flightTime.toFixed(3);
-    document.getElementById('t-buf').textContent  = bufferGlobal.length;
-    
-    // 2. ENVÍO AL BACKEND (Lo nuevo)
-    enviarAlServidor(ultima);
-
-    // Resetear el flag de rage clicking después de procesar
-    if (clickCount > 0) clickCount = 0;
-}, 1000);   // Cambio de 500ms a 1000ms para no saturar el servidor local

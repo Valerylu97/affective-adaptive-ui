@@ -1,204 +1,204 @@
 /**
  * @module ABTesting
- * @description Semana 3 — A/B Testing
- * Valida si el Modo Soporte reduce el tiempo de tarea
- * en usuarios frustrados comparado con el modo normal.
- *
- * Grupo A → usuario completa tarea en modo 'normal'
- * Grupo B → usuario completa tarea en modo 'frustrado' (soporte activo)
- *
- * Uso:
- *   import { ABTesting } from './src/ab-testing.js';
- *   const ab = new ABTesting(adapter);
- *   ab.iniciarTarea();      // cuando el usuario empieza
- *   ab.completarTarea();    // cuando el usuario termina
- *   ab.obtenerResultados(); // para ver el resumen
- *
- * @author Xavi
- * @version 1.0.0
+ * @description Gestión de experimentos A/B y recolección de métricas afectivas.
+ * Versión corregida: Integración de actualización de UI y métricas de Tesis UPEC.
  */
+
+import { bufferGlobal } from './sensors/sensors.js';
 
 export class ABTesting {
-  /**
-   * @param {import('./ui/UIAdapter').UIAdapter} adapter
-   * Necesita el adapter para saber en qué modo está el usuario
-   * cuando completa cada tarea.
-   */
-  constructor(adapter) {
-    this._adapter = adapter;
+    /**
+     * @param {Object} adapter - Instancia del UIAdapter para conocer el modo actual.
+     */
+    constructor(adapter) {
+        this._adapter = adapter;
+        this._inicioTarea = null;
+        this._totalTareas = 0;
+        
+        // Almacén de tiempos para cálculos estadísticos
+        this._tiempos = {
+            normal: [],
+            frustrado: [],
+        };
+
+        // Historial para exportación del Dataset (Tesis UPEC)
+        this._historial = [];
+    }
+
+    /** @returns {boolean} */
+    get tareaEnCurso() {
+        return this._inicioTarea !== null;
+    }
 
     /**
-     * Timestamp de cuando empezó la tarea actual.
-     * @type {number|null}
+     * Inicia el cronómetro y limpia el buffer para una medición limpia.
      */
-    this._inicioTarea = null;
+    iniciarTarea() {
+        this._inicioTarea = performance.now();
+        // Vaciamos el buffer para que las métricas de la tarea anterior 
+        // no contaminen la nueva medición.
+        bufferGlobal.length = 0; 
+        console.info('[ABTesting] ⏳ Tarea iniciada. Capturando métricas del buffer...');
+    }
 
     /**
-     * Resultados acumulados por grupo.
-     * Grupo A = normal, Grupo B = frustrado
-     * @type {{ normal: number[], frustrado: number[] }}
+     * Finaliza la tarea, procesa métricas y actualiza el panel visual.
+     * @param {number|null} tiempoManualMs - Tiempo opcional enviado por el iframe.
      */
-    this._tiempos = {
-      normal:    [],
-      frustrado: [],
-    };
+    completarTarea(tiempoManualMs = null) {
+        if (!this._inicioTarea) return null;
 
-    /** Contador de tareas completadas */
-    this._totalTareas = 0;
-  }
+        const duracion = tiempoManualMs !== null 
+            ? tiempoManualMs 
+            : (performance.now() - this._inicioTarea);
 
-  // ─────────────────────────────── Public API ─────────────────────────────
+        const modo = this._adapter.estadoActual;
 
-  /**
-   * Marca el inicio de una tarea.
-   * Llama esto cuando el usuario empieza a trabajar.
-   */
-  iniciarTarea() {
-    this._inicioTarea = performance.now();
-    console.info('[ABTesting] Tarea iniciada.');
-  }
+        // --- CÁLCULO DE MÉTRICAS MULTIMODALES ---
+        const muestras = bufferGlobal;
+        
+        const jitterPromedio = muestras.length > 0 
+            ? muestras.reduce((a, b) => a + (b.jitter || 0), 0) / muestras.length 
+            : 0;
 
-  /**
-   * Marca el fin de una tarea y registra el tiempo en el grupo correcto.
-   * El grupo se determina por el estado actual del adapter.
-   * Llama esto cuando el usuario completa la tarea.
-   *
-   * @returns {TareaResultado|null} resultado de la tarea o null si no había tarea activa
-   */
-  completarTarea() {
-    if (!this._inicioTarea) {
-      console.warn('[ABTesting] No hay tarea activa. Llama iniciarTarea() primero.');
-      return null;
+        const dwellPromedio = muestras.length > 0 
+            ? muestras.reduce((a, b) => a + (b.dwellTime || 0), 0) / muestras.length 
+            : 0;
+
+        // Guardar tiempo en el grupo correspondiente
+        if (this._tiempos[modo]) {
+            this._tiempos[modo].push(duracion);
+        }
+
+        this._totalTareas++;
+        
+        const resultado = {
+            tareaNum: this._totalTareas,
+            duracionMs: Math.round(duracion),
+            modo: modo,
+            timestamp: new Date().toISOString(),
+            jitterPromedio: parseFloat(jitterPromedio.toFixed(5)),
+            dwellPromedio: parseFloat(dwellPromedio.toFixed(5))
+        };
+
+        this._historial.push(resultado);
+        this._inicioTarea = null;
+
+        console.info('[ABTesting] ✅ Tarea completada:', resultado);
+
+        // ACTUALIZACIÓN AUTOMÁTICA DE LA UI
+        this.actualizarPanelResultados();
+
+        return resultado;
     }
 
-    const duracion = performance.now() - this._inicioTarea;
-    const modo     = this._adapter.estadoActual;
+    /**
+     * Actualiza el DOM con los promedios de tiempo y la conclusión de mejora.
+     */
+    actualizarPanelResultados() {
+        const elA = document.getElementById('ab-grupo-a');
+        const elB = document.getElementById('ab-grupo-b');
+        const elConclusion = document.getElementById('ab-conclusion');
 
-    // Solo registra en los grupos válidos
-    if (modo === 'normal' || modo === 'frustrado') {
-      this._tiempos[modo].push(duracion);
+        const promedioA = this._calcularPromedio(this._tiempos.normal);
+        const promedioB = this._calcularPromedio(this._tiempos.frustrado);
+
+        // Actualizar los textos de los grupos en el panel lateral
+        if (elA) elA.textContent = `${Math.round(promedioA)} ms (${this._tiempos.normal.length} tareas)`;
+        if (elB) elB.textContent = `${Math.round(promedioB)} ms (${this._tiempos.frustrado.length} tareas)`;
+
+        // --- LÓGICA DE CONCLUSIÓN DINÁMICA ---
+        if (promedioA > 0 && promedioB > 0) {
+            const diferencia = promedioA - promedioB;
+            const mejoraPorcentaje = ((diferencia / promedioA) * 100).toFixed(1);
+
+            if (elConclusion) {
+                if (diferencia > 0) {
+                    elConclusion.innerHTML = `🚀 El Modo Soporte es un <strong>${mejoraPorcentaje}%</strong> más rápido.`;
+                    elConclusion.style.color = "#27ae60"; 
+                } else if (diferencia < 0) {
+                    elConclusion.innerHTML = `⚠️ El Modo Normal es un <strong>${Math.abs(mejoraPorcentaje)}%</strong> más eficiente.`;
+                    elConclusion.style.color = "#e67e22";
+                } else {
+                    elConclusion.textContent = "⚖️ Ambos modos presentan el mismo rendimiento.";
+                    elConclusion.style.color = "#3498db";
+                }
+            }
+        } else if (elConclusion) {
+            elConclusion.textContent = "Esperando datos de ambos grupos...";
+            elConclusion.style.color = "#7f8c8d";
+        }
     }
 
-    this._totalTareas++;
-    this._inicioTarea = null;
+    /**
+     * Método auxiliar para obtener el objeto completo de resultados.
+     */
+    obtenerResultados() {
+        const promedioA = this._calcularPromedio(this._tiempos.normal);
+        const promedioB = this._calcularPromedio(this._tiempos.frustrado);
+        
+        const diferencia = promedioA - promedioB;
+        const porcentaje = promedioA > 0 ? Math.round((diferencia / promedioA) * 100) : 0;
 
-    /** @type {TareaResultado} */
-    const resultado = {
-      duracionMs: Math.round(duracion),
-      modo,
-      tareaNum: this._totalTareas,
-    };
-
-    console.info('[ABTesting] Tarea completada:', resultado);
-    return resultado;
-  }
-
-  /**
-   * Devuelve el resumen estadístico de los dos grupos.
-   * @returns {Resultados}
-   */
-  obtenerResultados() {
-    const promedioA = this._promedio(this._tiempos.normal);
-    const promedioB = this._promedio(this._tiempos.frustrado);
-
-    const diferencia  = promedioA - promedioB;
-    const porcentaje  = promedioA > 0
-      ? Math.round((diferencia / promedioA) * 100)
-      : 0;
-
-    /** @type {Resultados} */
-    return {
-      grupoA: {
-        modo:      'normal',
-        tareas:    this._tiempos.normal.length,
-        promedioMs: Math.round(promedioA),
-        tiempos:   [...this._tiempos.normal.map(t => Math.round(t))],
-      },
-      grupoB: {
-        modo:      'frustrado',
-        tareas:    this._tiempos.frustrado.length,
-        promedioMs: Math.round(promedioB),
-        tiempos:   [...this._tiempos.frustrado.map(t => Math.round(t))],
-      },
-      conclusion: this._conclusion(diferencia, porcentaje),
-      diferenciaMsMs: Math.round(diferencia),
-      mejoraPorcentaje: porcentaje,
-      totalTareas: this._totalTareas,
-    };
-  }
-
-  /**
-   * Reinicia todos los datos acumulados.
-   * Útil para empezar una nueva sesión de pruebas.
-   */
-  reiniciar() {
-    this._tiempos     = { normal: [], frustrado: [] };
-    this._inicioTarea = null;
-    this._totalTareas = 0;
-    console.info('[ABTesting] Datos reiniciados.');
-  }
-
-  // ──────────────────────────── Utilidades ────────────────────────────────
-
-  /**
-   * Calcula el promedio de un array de números.
-   * @param {number[]} arr
-   * @returns {number}
-   */
-  _promedio(arr) {
-    if (arr.length === 0) return 0;
-    return arr.reduce((a, b) => a + b, 0) / arr.length;
-  }
-
-  /**
-   * Genera la conclusión basada en los datos.
-   * @param {number} diferencia
-   * @param {number} porcentaje
-   * @returns {string}
-   */
-  _conclusion(diferencia, porcentaje) {
-    const grupoA = this._tiempos.normal.length;
-    const grupoB = this._tiempos.frustrado.length;
-
-    if (grupoA === 0 || grupoB === 0) {
-      return 'Datos insuficientes — se necesitan tareas en ambos grupos.';
+        return {
+            grupoA: { tareas: this._tiempos.normal.length, promedioMs: Math.round(promedioA) },
+            grupoB: { tareas: this._tiempos.frustrado.length, promedioMs: Math.round(promedioB) },
+            diferenciaMs: Math.round(diferencia),
+            mejoraPorcentaje: porcentaje,
+            totalTareas: this._totalTareas,
+            conclusion: this._formatearConclusion(diferencia, porcentaje)
+        };
     }
 
-    if (diferencia > 0) {
-      return `El Modo Soporte redujo el tiempo de tarea un ${porcentaje}% (${Math.round(diferencia)}ms más rápido).`;
+    _calcularPromedio(arr) {
+        return arr.length === 0 ? 0 : arr.reduce((a, b) => a + b, 0) / arr.length;
     }
 
-    if (diferencia < 0) {
-      return `El Modo Normal fue más rápido un ${Math.abs(porcentaje)}%. Revisar umbrales.`;
+    _formatearConclusion(diff, porc) {
+        if (this._tiempos.normal.length === 0 || this._tiempos.frustrado.length === 0) {
+            return "Faltan datos en ambos grupos para comparar.";
+        }
+        if (diff > 0) return `El soporte es un ${porc}% más eficiente.`;
+        if (diff < 0) return `El modo normal es ${Math.abs(porc)}% más rápido.`;
+        return "Ambos modos presentan el mismo rendimiento.";
     }
 
-    return 'Sin diferencia significativa entre los dos grupos.';
-  }
+    /**
+     * Exportación del Dataset para análisis estadístico (CSV/JSON).
+     */
+    exportarDataset() {
+        if (this._historial.length === 0) {
+            alert("No hay muestras registradas aún.");
+            return;
+        }
+
+        const data = {
+            metadata: {
+                universidad: "UPEC",
+                estudio: "AfectIHM - Adaptación de Interfaz",
+                investigadores: "Valeria Lucero, Xavier Guayga y José Guerrero",
+                fecha: new Date().toLocaleDateString()
+            },
+            muestras: this._historial
+        };
+
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `dataset_aura_${Date.now()}.json`;
+        link.click();
+        
+        URL.revokeObjectURL(url);
+    }
+
+    reiniciar() {
+        this._tiempos = { normal: [], frustrado: [] };
+        this._historial = [];
+        this._inicioTarea = null;
+        this._totalTareas = 0;
+        this.actualizarPanelResultados();
+        console.warn('[ABTesting] Datos de investigación reseteados.');
+    }
 }
-
-// ─────────────────────────────── JSDoc Types ────────────────────────────────
-
-/**
- * @typedef {Object} TareaResultado
- * @property {number} duracionMs  Duración en ms
- * @property {string} modo        Estado del adapter al completar
- * @property {number} tareaNum    Número de tarea completada
- */
-
-/**
- * @typedef {Object} GrupoResultado
- * @property {string}   modo        Nombre del modo
- * @property {number}   tareas      Número de tareas registradas
- * @property {number}   promedioMs  Promedio en ms
- * @property {number[]} tiempos     Lista de tiempos individuales
- */
-
-/**
- * @typedef {Object} Resultados
- * @property {GrupoResultado} grupoA
- * @property {GrupoResultado} grupoB
- * @property {string}         conclusion
- * @property {number}         diferenciaMsMs
- * @property {number}         mejoraPorcentaje
- * @property {number}         totalTareas
- */

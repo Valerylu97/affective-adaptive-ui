@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Tarea de Precisión - Aura UI</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #f0f2f5; }
+        #target {
+            position: absolute; width: 50px; height: 50px;
+            background: #2ecc71; border-radius: 50%;
+            box-shadow: 0 0 20px rgba(46, 204, 113, 0.5);
+            cursor: crosshair; transition: transform 0.1s linear;
+        }
+        #progress-container {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            width: 300px; height: 10px; background: #ddd; border-radius: 5px;
+        }
+        #progress-bar {
+            width: 0%; height: 100%; background: #2ecc71; border-radius: 5px; transition: width 0.2s;
+        }
+        .instrucciones { position: fixed; bottom: 20px; width: 100%; text-align: center; color: #7f8c8d; }
+    </style>
+</head>
+<body>
+
+    <div id="progress-container"><div id="progress-bar"></div></div>
+    <div id="target"></div>
+    <p class="instrucciones">Mantén el cursor dentro del círculo verde para cargar la barra.</p>
+
+    <script>
+        const target = document.getElementById('target');
+        const progressBar = document.getElementById('progress-bar');
+        let progress = 0;
+        let startTime = performance.now();
+        let isHovering = false;
+
+        // Movimiento suave del objetivo (Órbita circular o aleatoria suave)
+        let angle = 0;
+        function moveTarget() {
+            const x = Math.cos(angle) * 150 + (window.innerWidth / 2) - 25;
+            const y = Math.sin(angle * 0.8) * 100 + (window.innerHeight / 2) - 25;
+            target.style.left = `${x}px`;
+            target.style.top = `${y}px`;
+            angle += 0.02;
+            requestAnimationFrame(moveTarget);
+        }
+        moveTarget();
+
+        // Detección de precisión
+        target.addEventListener('mouseenter', () => isHovering = true);
+        target.addEventListener('mouseleave', () => isHovering = false);
+
+        const checkProgress = setInterval(() => {
+            if (isHovering) {
+                progress += 1.5; // Carga si está dentro
+                target.style.background = "#2ecc71";
+            } else {
+                progress -= 0.5; // Penaliza suavemente si se sale
+                target.style.background = "#e74c3c";
+                if (progress < 0) progress = 0;
+            }
+
+            progressBar.style.width = `${progress}%`;
+
+            if (progress >= 100) {
+                clearInterval(checkProgress);
+                const duration = performance.now() - startTime;
+                
+                // ENVIAR DATOS AL PANEL PRINCIPAL
+                window.parent.postMessage({
+                    type: 'EXPERIMENT_EVENT',
+                    action: 'task_completed',
+                    duration: duration
+                }, '*');
+
+                alert("🎯 ¡Excelente precisión! Tarea completada.");
+            }
+        }, 50);
+
+        // Script Puente para enviar eventos al sistema Aura (Parent)
+        document.addEventListener('mousemove', (e) => {
+            window.parent.postMessage({
+                type: 'SENSOR_BRIDGE',
+                event: 'mousemove',
+                data: { clientX: e.clientX, clientY: e.clientY }
+            }, '*');
+        }, { passive: true });
+
+        document.addEventListener('keydown', (e) => {
+            window.parent.postMessage({
+                type: 'SENSOR_BRIDGE',
+                event: 'keydown',
+                data: { code: e.code }
+            }, '*');
+        });
+
+        document.addEventListener('keyup', (e) => {
+            window.parent.postMessage({
+                type: 'SENSOR_BRIDGE',
+                event: 'keyup',
+                data: { code: e.code }
+            }, '*');
+        });
+    </script>
+</body>
+</html>

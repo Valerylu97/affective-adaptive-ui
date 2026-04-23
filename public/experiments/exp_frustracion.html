@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>AfectIHM - Experimento 1: Frustración Inducida</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        :root { --aura-accent: #e74c3c; }
+        .task-box { max-width: 500px; margin: 50px auto; padding: 30px; border: 2px solid #ccc; border-radius: 12px; transition: all 0.3s; background: white; }
+        
+        /* Botón Glitch mejorado */
+        .glitch-btn { transition: transform 0.1s ease-out; position: relative; padding: 10px 20px; cursor: pointer; }
+        
+        /* Estilos de estado aplicados por UIAdapter */
+        body.aura--frustrado .task-box { border-color: var(--aura-accent); box-shadow: 0 0 20px rgba(231, 76, 60, 0.2); }
+        body.aura--frustrado .glitch-btn { transform: scale(1.2) !important; background: var(--aura-accent); color: white; left: 0 !important; top: 0 !important; }
+        
+        .support-banner { 
+            display: none; background: #fff5f5; border: 1px solid #feb2b2; 
+            padding: 15px; margin-top: 20px; border-radius: 8px; animation: fadeIn 0.5s;
+        }
+        body.aura--frustrado .support-banner { display: flex; align-items: center; gap: 10px; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body class="aura--normal">
+
+    <div class="task-box">
+        <h2>Validación de Identidad Crítica</h2>
+        <p style="font-size: 14px; color: #666;">Copie el token exactamente. El sistema detecta latencia.</p>
+        <hr>
+        
+        <form id="test-form">
+            <label>Token de Acceso (Respetar Mayúsculas):</label><br>
+            <div style="background: #eee; padding: 5px; font-family: monospace; display: inline-block; margin: 10px 0;">
+                AF-99X-2026
+            </div>
+            <br>
+            <input type="text" id="token-input" placeholder="Escriba aquí..." style="width: 100%; padding: 10px; box-sizing: border-box;">
+            
+            <div style="margin-top: 25px; height: 60px;">
+                <button type="button" id="btn-submit" class="glitch-btn">Verificar y Finalizar</button>
+            </div>
+        </form>
+
+        <div id="help-panel" class="support-banner">
+            <span style="font-size: 24px;">💡</span>
+            <div>
+                <strong>Asistente Afectivo:</strong> Detectamos tensión. Hemos estabilizado la interfaz y eliminado el lag del teclado.
+                <br>
+                <button onclick="autoFix()" style="margin-top:5px;">Aplicar corrección</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="panel-transparencia" style="position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 15px; font-family: monospace; border-radius: 8px; font-size: 12px;">
+        <div>Estado: <span id="estado-label">NORMAL</span></div>
+        <div>Face Angry: <span id="t-face">0.00</span></div>
+        <div>Jitter: <span id="t-jit">0.00</span></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script type="module" src="/src/logic/engine.js"></script>
+    
+    <script>
+        const btn = document.getElementById('btn-submit');
+        const input = document.getElementById('token-input');
+        let startTime = performance.now(); // Inicio del cronómetro
+        let clicks = 0;
+        
+        /**
+         * 1. LÓGICA DEL BOTÓN QUE HUYE
+         */
+        btn.addEventListener('mouseover', () => {
+            if (document.body.classList.contains('aura--normal')) {
+                // Aumentamos el límite de 40 a 100 para mayor velocidad de desplazamiento
+                const limit = 100; 
+                const x = (Math.random() - 0.5) * limit;
+                const y = (Math.random() - 0.5) * limit;
+                
+                // Aplicamos una transición más corta (0.05s) para que se sienta "nervioso"
+                btn.style.transition = "transform 0.05s ease-out";
+                btn.style.transform = `translate(${x}px, ${y}px)`;
+            }
+        });
+
+        /**
+         * 2. MEDICIÓN DE TIEMPO Y COMPLETITUD
+         */
+        btn.addEventListener('click', () => {
+            const tokenCorrecto = "AF-99X-2026";
+            
+            if (input.value.trim() === tokenCorrecto) {
+                const endTime = performance.now();
+                const durationMs = (endTime - startTime).toFixed(2);
+                
+                alert(`¡Tarea completada en ${durationMs / 1000} segundos!`);
+                
+                // ENVIAR MÉTRICA AL PADRE (index.html)
+                // Esto permite que el ABTesting registre el tiempo automáticamente
+                window.parent.postMessage({
+                    type: 'EXPERIMENT_EVENT',
+                    action: 'task_completed',
+                    duration: parseFloat(durationMs)
+                }, '*');
+
+            } else {
+                clicks++;
+                if (clicks >= 3) {
+                    // Notificamos al motor afectivo que el usuario está fallando
+                    window.parent.postMessage({
+                        type: 'EXPERIMENT_EVENT',
+                        action: 'trigger_frustration'
+                    }, '*');
+                }
+            }
+        });
+
+        /**
+         * 3. LÓGICA DE LAG ARTIFICIAL EN TECLADO
+         * Retrasa la aparición de caracteres para frustrar al usuario.
+         */
+        let realValue = "";
+        input.addEventListener('keydown', (e) => {
+            // Si el modo soporte está activo, no hay lag
+            if (document.body.classList.contains('aura--frustrado')) return;
+
+            // Bloqueamos la escritura natural
+            if (e.key.length === 1) { 
+                e.preventDefault();
+                const char = e.key;
+                // Inyectamos el caracter con un retraso de 400ms
+                setTimeout(() => {
+                    input.value += char;
+                }, 400);
+            }
+        });
+
+        function autoFix() {
+            input.value = "AF-99X-2026";
+            alert("Interfaz optimizada y datos corregidos.");
+        }
+
+        // Script Puente para enviar eventos al sistema Aura (Parent)
+        document.addEventListener('mousemove', (e) => {
+            window.parent.postMessage({
+                type: 'SENSOR_BRIDGE',
+                event: 'mousemove',
+                data: { clientX: e.clientX, clientY: e.clientY }
+            }, '*');
+        }, { passive: true });
+
+        document.addEventListener('keydown', (e) => {
+            window.parent.postMessage({
+                type: 'SENSOR_BRIDGE',
+                event: 'keydown',
+                data: { code: e.code }
+            }, '*');
+        });
+
+        document.addEventListener('keyup', (e) => {
+            window.parent.postMessage({
+                type: 'SENSOR_BRIDGE',
+                event: 'keyup',
+                data: { code: e.code }
+            }, '*');
+        });
+    </script>
+</body>
+</html>
