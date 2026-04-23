@@ -175,7 +175,7 @@ function iniciarBucleInferencia() {
  */
 function activarSoporteConExplicacion(metricaDisparadora) {
     const labelRazon = document.getElementById('razon-activacion');
-    let mensaje = "";
+    let mensaje; // Definimos la variable sin asignar un valor inicial inútil
 
     switch(metricaDisparadora) {
         case 'facial':
@@ -191,9 +191,11 @@ function activarSoporteConExplicacion(metricaDisparadora) {
             mensaje = "Intervención manual del investigador o protocolo de prueba.";
     }
 
-    if (labelRazon) labelRazon.textContent = mensaje;
+    if (labelRazon) {
+        labelRazon.textContent = mensaje;
+    }
     
-    // Aplicar cambio visual
+    // Aplicar cambio visual mediante el adaptador de UI
     adapter.applyAdaptation('frustrado');
     console.info(`[Transparencia] Soporte activado por: ${metricaDisparadora}`);
 }
