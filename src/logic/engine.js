@@ -35,6 +35,12 @@ let videoElement = null;
 let inferenceInterval = null;
 
 /**
+ * LÓGICA DE BLOQUEO (Semana 4 - Autonomía del Usuario)
+ * modoSoporteBloqueado: Si es true, impide que la IA regrese a modo normal automáticamente.
+ */
+let modoSoporteBloqueado = false;
+
+/**
  * 2. GESTIÓN DE SENSORES Y PRIVACIDAD
  */
 async function inicializarSistemaAfectivo() {
@@ -94,13 +100,13 @@ window.addEventListener('message', (event) => {
             }
         }
         if (action === 'trigger_frustration') {
-            activarSoporteConExplicacion('motor'); // Trigger manual desde el experimento
+            activarSoporteConExplicacion('motor'); // Trigger manual
         }
     }
 });
 
 /**
- * 4. MOTOR DE INFERENCIA AFECTIVA (Control Híbrido)
+ * 4. MOTOR DE INFERENCIA AFECTIVA (Control Híbrido con Bloqueo de Estado)
  */
 function iniciarBucleInferencia() {
     if (inferenceInterval) clearInterval(inferenceInterval);
@@ -108,17 +114,18 @@ function iniciarBucleInferencia() {
     inferenceInterval = setInterval(async () => {
         if (!isSensing() || !videoElement) return;
 
-        // Prioridad: ¿Estamos en modo manual o automático?
-        const selectorModo = document.querySelector('input[name="test-mode"]:checked')?.value || 'auto';
+        // --- NUEVA LÓGICA DE BLOQUEO ---
+        // Si el modo soporte está bloqueado, pausamos la inferencia automática 
+        // para que la interfaz no parpadee ni regrese a normal sin permiso del usuario.
+        if (modoSoporteBloqueado) return;
 
+        const selectorModo = document.querySelector('input[name="test-mode"]:checked')?.value || 'auto';
         const ultimaMuestra = bufferGlobal.at(-1);
         if (!ultimaMuestra) return;
 
         let cara = null;
         try { cara = await getFaceMetrics(videoElement); }
-        catch (err) {
-            console.error("Error en engine.js:", err);
-        }
+        catch (err) { console.error("Error en engine.js:", err); }
 
         const datosEntrada = {
             face: cara,
@@ -135,21 +142,19 @@ function iniciarBucleInferencia() {
         const nuevoEstadoIA = prediccion.dominant;
         const estadoActualUI = adapter.estadoActual;
 
-        // LÓGICA DE DECISIÓN (Integración con Panel de Transparencia)
+        // LÓGICA DE DECISIÓN
         if (selectorModo === 'auto') {
-            const esEstadoCritico = ab.tareaEnCurso && estadoActualUI === 'frustrado';
-            
-            if (!esEstadoCritico && nuevoEstadoIA !== estadoActualUI) {
-                if (nuevoEstadoIA === 'frustrado') {
-                    // Decidimos la métrica disparadora para la explicación
-                    let razon = 'mixto';
-                    if (prediccion.frustrado > 0.6 && ultimaMuestra.jitter < 0.05) razon = 'facial';
-                    else if (ultimaMuestra.jitter > 0.07 || isRageClicking) razon = 'motor';
-                    
-                    activarSoporteConExplicacion(razon);
-                } else {
-                    adapter.applyAdaptation('normal');
-                }
+            if (nuevoEstadoIA === 'frustrado' && estadoActualUI !== 'frustrado') {
+                // ACTIVAMOS EL BLOQUEO: Entra en soporte y se queda ahí.
+                modoSoporteBloqueado = true;
+                
+                let razon = 'mixto';
+                if (prediccion.frustrado > 0.6 && ultimaMuestra.jitter < 0.05) razon = 'facial';
+                else if (ultimaMuestra.jitter > 0.07 || isRageClicking) razon = 'motor';
+                
+                activarSoporteConExplicacion(razon);
+            } else if (nuevoEstadoIA === 'normal' && estadoActualUI !== 'normal') {
+                adapter.applyAdaptation('normal');
             }
         } else {
             // Modo Manual (Investigador)
@@ -171,11 +176,10 @@ function iniciarBucleInferencia() {
 
 /**
  * 5. FUNCIÓN DE TRANSPARENCIA Y EXPLICABILIDAD (Semana 4)
- * Muestra al usuario qué estado se detectó y por qué.
  */
 function activarSoporteConExplicacion(metricaDisparadora) {
     const labelRazon = document.getElementById('razon-activacion');
-    let mensaje; // Definimos la variable sin asignar un valor inicial inútil
+    let mensaje;
 
     switch(metricaDisparadora) {
         case 'facial':
@@ -195,18 +199,31 @@ function activarSoporteConExplicacion(metricaDisparadora) {
         labelRazon.textContent = mensaje;
     }
     
-    // Aplicar cambio visual mediante el adaptador de UI
     adapter.applyAdaptation('frustrado');
     console.info(`[Transparencia] Soporte activado por: ${metricaDisparadora}`);
 }
 
 /**
- * 6. CONTROL DE PROTOCOLO (Investigación A/B)
+ * LIBERACIÓN DEL BLOQUEO (Invocado por el usuario desde la UI)
+ */
+window.activarModoAuto = function() {
+    console.log("[Aura] Usuario solicita retorno a Normal. Liberando bloqueo.");
+    modoSoporteBloqueado = false; 
+    adapter.applyAdaptation('normal');
+    
+    const radioAuto = document.getElementById('radio-auto');
+    if (radioAuto) radioAuto.checked = true;
+};
+
+/**
+ * 6. CONTROL DE PROTOCOLO
  */
 document.addEventListener('change', (e) => {
     if (e.target.name === 'test-mode') {
         const modoManual = e.target.value;
         if (modoManual !== 'auto') {
+            // Si el usuario cambia manualmente el modo, reseteamos el bloqueo
+            modoSoporteBloqueado = false;
             if (modoManual === 'frustrado') {
                 activarSoporteConExplicacion('default');
             } else {
@@ -244,7 +261,7 @@ function actualizarTelemetriaUI(ultima, cara, prediccion, estadoMostrado) {
 }
 
 function actualizarPanelAB() {
-    ab.actualizarPanelResultados(); // Usamos el método unificado de la clase ABTesting
+    ab.actualizarPanelResultados();
 }
 
 /**
@@ -276,6 +293,7 @@ document.getElementById('btn-privacidad')?.addEventListener('click', async () =>
         stopSensors(); 
         stopFaceDetection(videoElement); 
         if (inferenceInterval) clearInterval(inferenceInterval);
+        modoSoporteBloqueado = false;
         document.getElementById('btn-privacidad').textContent = '▶ Activar sensores';
         adapter.applyAdaptation('normal');
     } else {
