@@ -1,0 +1,42 @@
+{
+  "metadata": {
+    "universidad": "UPEC",
+    "estudio": "AfectIHM - Adaptación de Interfaz",
+    "investigadores": "Valeria Lucero, Xavier Guayga y José Guerrero",
+    "fecha": "22/4/2026"
+  },
+  "muestras": [
+    {
+      "tareaNum": 1,
+      "duracionMs": 16831,
+      "modo": "normal",
+      "timestamp": "2026-04-23T03:19:11.353Z",
+      "jitterPromedio": 0.00866,
+      "dwellPromedio": 0.10292
+    },
+    {
+      "tareaNum": 2,
+      "duracionMs": 15316,
+      "modo": "normal",
+      "timestamp": "2026-04-23T03:19:30.965Z",
+      "jitterPromedio": 0.01895,
+      "dwellPromedio": 0
+    },
+    {
+      "tareaNum": 3,
+      "duracionMs": 14233,
+      "modo": "frustrado",
+      "timestamp": "2026-04-23T03:19:59.800Z",
+      "jitterPromedio": 0.00827,
+      "dwellPromedio": 0.04747
+    },
+    {
+      "tareaNum": 4,
+      "duracionMs": 8060,
+      "modo": "frustrado",
+      "timestamp": "2026-04-23T03:20:13.977Z",
+      "jitterPromedio": 0.02139,
+      "dwellPromedio": 0
+    }
+  ]
+}
